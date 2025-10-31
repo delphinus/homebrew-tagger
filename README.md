@@ -162,7 +162,8 @@ files:
 When generating YAML from audio files, if tags are missing, tagger will automatically parse metadata from filenames:
 
 - `01-Artist-Title.mp3` → track=1, artist="Artist", title="Title"
-- `01-Title.mp3` → track=1, artist="", title="Title"
+- `01 - Title.mp3` → track=1, artist="", title="Title" (space-separated format)
+- `01-Title.mp3` → track=1, artist="", title="Title" (backward compatibility)
 - `Artist-Title.mp3` → artist="Artist", title="Title"
 - `Title.mp3` → title="Title"
 
@@ -217,7 +218,7 @@ tagger --execute tagger.yaml
 When applying tags, files will be automatically renamed based on their tags:
 
 - Track + Artist: `01-Artist-Title.mp3`
-- Track only: `01-Title.mp3`
+- Track only: `01 - Title.mp3` (space-separated for better readability)
 - Artist only: `Artist-Title.mp3`
 - Title only: `Title.mp3`
 

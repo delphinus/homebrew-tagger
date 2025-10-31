@@ -109,32 +109,40 @@ class Tagger:
 
         Supported patterns:
         - 01-Artist-Title.mp3 -> track=1, artist="Artist", title="Title"
-        - 01-Title.mp3 -> track=1, artist="", title="Title"
+        - 01 - Title.mp3 -> track=1, artist="", title="Title"
         - Artist-Title.mp3 -> track=None, artist="Artist", title="Title"
         - Title.mp3 -> track=None, artist="", title="Title"
         """
         # Remove extension
         name = Path(filename).stem
 
-        # Try to match pattern with track number
-        # Pattern: 01-Artist-Title or 01-Title
-        match = re.match(r'^(\d+)-(.+)$', name)
+        # Try to match pattern with track number (with optional spaces around hyphen)
+        # Pattern: "01-..." or "01 - ..."
+        match = re.match(r'^(\d+)\s*-\s*(.+)$', name)
 
         if match:
             track = int(match.group(1))
             remainder = match.group(2)
 
-            # Split remainder by hyphen
-            parts = remainder.split('-', 1)
-
-            if len(parts) == 2:
-                # Format: 01-Artist-Title
-                artist = parts[0]
-                title = parts[1]
-            else:
-                # Format: 01-Title
+            # Check if remainder contains a hyphen
+            # If it contains " - " (space-hyphen-space), it's likely track-title format (no artist)
+            # If it contains "-" (no spaces), it's likely track-artist-title format
+            if ' - ' in remainder:
+                # Format: "01 - Title" (no artist)
                 artist = ""
-                title = parts[0]
+                title = remainder
+            else:
+                # Split remainder by hyphen (without spaces)
+                parts = remainder.split('-', 1)
+
+                if len(parts) == 2:
+                    # Format: 01-Artist-Title
+                    artist = parts[0].strip()
+                    title = parts[1].strip()
+                else:
+                    # Format: 01-Title (backward compatibility)
+                    artist = ""
+                    title = parts[0].strip()
         else:
             # No track number
             track = None
@@ -142,12 +150,12 @@ class Tagger:
 
             if len(parts) == 2:
                 # Format: Artist-Title
-                artist = parts[0]
-                title = parts[1]
+                artist = parts[0].strip()
+                title = parts[1].strip()
             else:
                 # Format: Title
                 artist = ""
-                title = parts[0]
+                title = parts[0].strip()
 
         return {
             'track': track,
@@ -355,8 +363,8 @@ class Tagger:
             # Format: 01-Artist-Title.mp3
             filename = f"{track:02d}-{artist}-{title}{ext}"
         elif track:
-            # Format: 01-Title.mp3 (no artist)
-            filename = f"{track:02d}-{title}{ext}"
+            # Format: 01 - Title.mp3 (no artist, with spaces)
+            filename = f"{track:02d} - {title}{ext}"
         elif artist:
             # Format: Artist-Title.mp3 (no track)
             filename = f"{artist}-{title}{ext}"
