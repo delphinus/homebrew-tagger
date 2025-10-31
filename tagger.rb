@@ -7,6 +7,7 @@ class Tagger < Formula
   sha256 "43b162994a466255a6d77a701e1fa2a30d245da7bf500a6bbb00c60e27f309e8"
   license "MIT"
 
+  depends_on "ffmpeg"
   depends_on "python@3.14"
 
   resource "mutagen" do

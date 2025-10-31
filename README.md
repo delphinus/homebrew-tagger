@@ -5,6 +5,7 @@ Audio file tag and filename manager using [mutagen](https://mutagen.readthedocs.
 ## Features
 
 - Manage tags for `.mp3` and `.m4a` files
+- Automatically convert `.aac` files to `.m4a` format (lossless container conversion)
 - Update tags from YAML configuration
 - Automatically rename files based on tags
 - Generate YAML from existing audio files
@@ -47,7 +48,20 @@ chmod +x tagger
 ln -s $(pwd)/tagger /usr/local/bin/tagger
 ```
 
+## Requirements
+
+- Python 3.7 or later
+- [mutagen](https://mutagen.readthedocs.io/) (automatically installed)
+- [PyYAML](https://pyyaml.org/) (automatically installed)
+- [ffmpeg](https://ffmpeg.org/) (optional, required for .aac to .m4a conversion)
+
 ## Usage
+
+### AAC to M4A Conversion
+
+If you have `.aac` files in your directory, tagger will automatically convert them to `.m4a` format before processing. This conversion is lossless - it only changes the container format without re-encoding the audio.
+
+**Note:** ffmpeg must be installed for this feature to work. With Homebrew, ffmpeg is automatically installed as a dependency.
 
 ### Generate YAML from existing audio files
 

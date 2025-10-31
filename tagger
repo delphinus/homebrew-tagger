@@ -3,11 +3,14 @@
 Tagger - Audio file tag and filename manager using mutagen
 
 This script manages tags and filenames for .mp3 and .m4a files.
+It can also convert .aac files to .m4a format (lossless container conversion).
 """
 
 import argparse
 import os
 import sys
+import subprocess
+import shutil
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 import yaml
@@ -43,6 +46,62 @@ class Tagger:
         for ext in self.SUPPORTED_EXTENSIONS:
             files.extend(path.glob(f"*{ext}"))
         return sorted(files)
+
+    def check_ffmpeg(self) -> bool:
+        """Check if ffmpeg is available"""
+        return shutil.which('ffmpeg') is not None
+
+    def convert_aac_to_m4a(self, aac_file: Path) -> Optional[Path]:
+        """Convert AAC file to M4A format without re-encoding (lossless container conversion)"""
+        if not self.check_ffmpeg():
+            self.log("Warning: ffmpeg not found. Cannot convert .aac files to .m4a")
+            return None
+
+        m4a_file = aac_file.with_suffix('.m4a')
+
+        if self.dry_run:
+            self.log(f"Would convert: {aac_file.name} -> {m4a_file.name}")
+            return m4a_file
+
+        try:
+            # Convert container without re-encoding (lossless)
+            subprocess.run(
+                ['ffmpeg', '-i', str(aac_file), '-c', 'copy', '-y', str(m4a_file)],
+                check=True,
+                capture_output=True,
+                text=True
+            )
+            self.log(f"Converted: {aac_file.name} -> {m4a_file.name}")
+
+            # Remove original .aac file after successful conversion
+            aac_file.unlink()
+            self.log(f"Removed original: {aac_file.name}")
+
+            return m4a_file
+        except subprocess.CalledProcessError as e:
+            self.log(f"Error: Failed to convert {aac_file}: {e.stderr}")
+            return None
+        except Exception as e:
+            self.log(f"Error: Could not convert {aac_file}: {e}")
+            return None
+
+    def find_and_convert_aac_files(self, directory: str = ".") -> List[Path]:
+        """Find all .aac files and convert them to .m4a"""
+        path = Path(directory)
+        aac_files = list(path.glob("*.aac"))
+
+        if not aac_files:
+            return []
+
+        self.log(f"Found {len(aac_files)} .aac file(s) to convert")
+
+        converted_files = []
+        for aac_file in aac_files:
+            m4a_file = self.convert_aac_to_m4a(aac_file)
+            if m4a_file:
+                converted_files.append(m4a_file)
+
+        return converted_files
 
     def read_tags(self, filepath: Path) -> Dict[str, Any]:
         """Read tags from an audio file"""
@@ -256,6 +315,9 @@ class Tagger:
 
     def generate_yaml(self, output_file: str = "tagger.yaml"):
         """Generate YAML file from current directory audio files"""
+        # First, convert any .aac files to .m4a
+        self.find_and_convert_aac_files()
+
         files = self.find_audio_files()
 
         if not files:
@@ -290,6 +352,9 @@ class Tagger:
 
     def apply_yaml(self, yaml_file: str):
         """Apply tags and filenames from YAML file"""
+        # First, convert any .aac files to .m4a
+        self.find_and_convert_aac_files()
+
         if not os.path.exists(yaml_file):
             self.log(f"Error: YAML file not found: {yaml_file}")
             sys.exit(1)
