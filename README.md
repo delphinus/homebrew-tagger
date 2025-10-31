@@ -144,18 +144,29 @@ files:
 ### Required Fields
 
 - `filename`: Original filename (required)
-- `track`: Track number (required)
-- `artist`: Artist name (required)
 - `title`: Track title (required)
 
 ### Optional Fields
 
+- `track`: Track number
+- `artist`: Artist name (can be empty or omitted for artist-less tracks)
 - `album`: Album name
 - `albumartist`: Album artist (for compilations)
 - `genre`: Music genre
 - `year`: Release year
 - `artwork`: Path to artwork image file (JPG or PNG)
 - `compilation`: Boolean flag for compilation albums
+
+### Filename Parsing
+
+When generating YAML from audio files, if tags are missing, tagger will automatically parse metadata from filenames:
+
+- `01-Artist-Title.mp3` → track=1, artist="Artist", title="Title"
+- `01-Title.mp3` → track=1, artist="", title="Title"
+- `Artist-Title.mp3` → artist="Artist", title="Title"
+- `Title.mp3` → title="Title"
+
+This is especially useful for files without embedded tags. The parsed values are used as fallbacks when actual ID3/MP4 tags are not present.
 
 ## Examples
 
@@ -205,8 +216,10 @@ tagger --execute tagger.yaml
 
 When applying tags, files will be automatically renamed based on their tags:
 
-- With track number: `01-Artist-Title.mp3`
-- Without track number: `Artist-Title.mp3`
+- Track + Artist: `01-Artist-Title.mp3`
+- Track only: `01-Title.mp3`
+- Artist only: `Artist-Title.mp3`
+- Title only: `Title.mp3`
 
 Invalid filename characters (`<>:"/\|?*`) are replaced with underscores.
 

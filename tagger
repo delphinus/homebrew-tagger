@@ -8,6 +8,7 @@ It can also convert .aac files to .m4a format (lossless container conversion).
 
 import argparse
 import os
+import re
 import sys
 import subprocess
 import shutil
@@ -103,6 +104,57 @@ class Tagger:
 
         return converted_files
 
+    def parse_filename(self, filename: str) -> Dict[str, Any]:
+        """Parse metadata from filename
+
+        Supported patterns:
+        - 01-Artist-Title.mp3 -> track=1, artist="Artist", title="Title"
+        - 01-Title.mp3 -> track=1, artist="", title="Title"
+        - Artist-Title.mp3 -> track=None, artist="Artist", title="Title"
+        - Title.mp3 -> track=None, artist="", title="Title"
+        """
+        # Remove extension
+        name = Path(filename).stem
+
+        # Try to match pattern with track number
+        # Pattern: 01-Artist-Title or 01-Title
+        match = re.match(r'^(\d+)-(.+)$', name)
+
+        if match:
+            track = int(match.group(1))
+            remainder = match.group(2)
+
+            # Split remainder by hyphen
+            parts = remainder.split('-', 1)
+
+            if len(parts) == 2:
+                # Format: 01-Artist-Title
+                artist = parts[0]
+                title = parts[1]
+            else:
+                # Format: 01-Title
+                artist = ""
+                title = parts[0]
+        else:
+            # No track number
+            track = None
+            parts = name.split('-', 1)
+
+            if len(parts) == 2:
+                # Format: Artist-Title
+                artist = parts[0]
+                title = parts[1]
+            else:
+                # Format: Title
+                artist = ""
+                title = parts[0]
+
+        return {
+            'track': track,
+            'artist': artist if artist else None,
+            'title': title if title else None,
+        }
+
     def read_tags(self, filepath: Path) -> Dict[str, Any]:
         """Read tags from an audio file"""
         ext = filepath.suffix.lower()
@@ -175,6 +227,17 @@ class Tagger:
 
         except Exception as e:
             self.log(f"Warning: Could not read tags from {filepath}: {e}")
+
+        # If track, artist, or title is missing, try to parse from filename
+        if tags['track'] is None or tags['artist'] is None or tags['title'] is None:
+            parsed = self.parse_filename(filepath.name)
+
+            if tags['track'] is None and parsed['track'] is not None:
+                tags['track'] = parsed['track']
+            if tags['artist'] is None and parsed['artist'] is not None:
+                tags['artist'] = parsed['artist']
+            if tags['title'] is None and parsed['title'] is not None:
+                tags['title'] = parsed['title']
 
         return tags
 
@@ -280,17 +343,26 @@ class Tagger:
     def generate_filename(self, tags: Dict[str, Any]) -> str:
         """Generate filename from tags"""
         track = tags.get('track', '')
-        artist = tags.get('artist', 'Unknown Artist')
+        artist = tags.get('artist', '')
         title = tags.get('title', 'Unknown Title')
 
         # Get original extension
         original_filename = tags.get('filename', '.mp3')
         ext = Path(original_filename).suffix
 
-        if track:
+        # Build filename based on available metadata
+        if track and artist:
+            # Format: 01-Artist-Title.mp3
             filename = f"{track:02d}-{artist}-{title}{ext}"
-        else:
+        elif track:
+            # Format: 01-Title.mp3 (no artist)
+            filename = f"{track:02d}-{title}{ext}"
+        elif artist:
+            # Format: Artist-Title.mp3 (no track)
             filename = f"{artist}-{title}{ext}"
+        else:
+            # Format: Title.mp3 (no track, no artist)
+            filename = f"{title}{ext}"
 
         return self.sanitize_filename(filename)
 
