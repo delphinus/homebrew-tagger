@@ -159,10 +159,13 @@ files:
 
 ### Filename Parsing
 
-When generating YAML from audio files, if tags are missing, tagger will automatically parse metadata from filenames. **All separators must use spaces around hyphens** (` - `):
+When generating YAML from audio files, if tags are missing, tagger will automatically parse metadata from filenames.
+
+**Parsing is flexible** - any number of spaces (1 or more) is accepted:
 
 - `01 Artist - Title.mp3` → track=1, artist="Artist", title="Title"
-- `01 - Title.mp3` → track=1, artist="", title="Title"
+- `01  - Title.mp3` → track=1, artist="", title="Title"
+- `01    -    Title.mp3` → track=1, artist="", title="Title" (extra spaces are OK)
 - `01 Title.mp3` → track=1, artist="", title="Title"
 - `Artist - Title.mp3` → artist="Artist", title="Title"
 - `Title.mp3` → title="Title"
@@ -215,12 +218,14 @@ tagger --execute tagger.yaml
 
 ## Filename Generation
 
-When applying tags, files will be automatically renamed based on their tags. **All separators use spaces around hyphens** (` - `):
+When applying tags, files will be automatically renamed based on their tags using strict spacing rules:
 
-- Track + Artist: `01 Artist - Title.mp3`
-- Track only: `01 - Title.mp3`
-- Artist only: `Artist - Title.mp3`
+- Track + Artist: `01 Artist - Title.mp3` (1 space after track, 1 space before hyphen, 1 space after hyphen)
+- Track only: `01  - Title.mp3` (2 spaces before hyphen when no artist, 1 space after hyphen)
+- Artist only: `Artist - Title.mp3` (1 space before hyphen, 1 space after hyphen)
 - Title only: `Title.mp3`
+
+**Note**: When there's no artist but there is a track number, use 2 spaces before the hyphen to distinguish it from the track+artist format.
 
 Invalid filename characters (`<>:"/\|?*`) are replaced with underscores.
 
