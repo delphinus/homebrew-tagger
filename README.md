@@ -6,7 +6,8 @@ Audio file tag and filename manager using [mutagen](https://mutagen.readthedocs.
 
 - Manage tags for `.mp3` and `.m4a` files
 - Automatically convert `.aac` files to `.m4a` format (lossless container conversion)
-- Update tags from YAML configuration
+- Update tags from YAML configuration with `defaults` section for album-wide metadata
+- Automatically extract common metadata to `defaults` when generating YAML
 - Automatically rename files based on tags
 - Generate YAML from existing audio files
 - Dry-run mode by default to preview changes
@@ -92,28 +93,52 @@ tagger --execute tagger.yaml
 The YAML file should have the following structure:
 
 ```yaml
+defaults:
+  album: Album Name
+  albumartist: Album Artist Name
+  genre: Rock
+  year: 2023
+  artwork: cover.jpg
+  compilation: false
+
 files:
   - filename: 01-artist-title.mp3
     track: 1
     artist: Artist Name
     title: Title Name
-    album: Album Name
-    albumartist: Album Artist Name
-    genre: Rock
-    year: 2023
-    artwork: cover.jpg
-    compilation: false
 
   - filename: 02-artist-another-title.mp3
     track: 2
     artist: Artist Name
     title: Another Title
-    album: Album Name
-    albumartist: Album Artist Name
-    genre: Rock
-    year: 2023
-    artwork: cover.jpg
-    compilation: false
+```
+
+### Defaults Section
+
+The `defaults` section is optional and allows you to specify common metadata that applies to all files. This is useful for album-wide information like:
+
+- `album`: Album name
+- `albumartist`: Album artist
+- `genre`: Music genre
+- `year`: Release year
+- `artwork`: Path to artwork image file
+- `compilation`: Boolean flag for compilation albums
+
+**Automatic Optimization**: When generating YAML from audio files, tagger automatically detects common values across all files and moves them to the `defaults` section. This keeps your YAML files clean and concise.
+
+**Overriding Defaults**: File-specific values always take priority over defaults. For example:
+
+```yaml
+defaults:
+  album: Greatest Hits
+  genre: Rock
+
+files:
+  - filename: 01-special-track.mp3
+    track: 1
+    artist: Artist Name
+    title: Special Track
+    genre: Pop  # Overrides the default "Rock" for this file only
 ```
 
 ### Required Fields

@@ -334,8 +334,30 @@ class Tagger:
             entry = {k: v for k, v in tags.items() if v is not None}
             entries.append(entry)
 
+        # Extract common fields to defaults
+        common_fields = ['album', 'albumartist', 'genre', 'year', 'artwork', 'compilation']
+        defaults = {}
+
+        if len(entries) > 1:  # Only extract defaults if there are multiple files
+            for field in common_fields:
+                # Get all values for this field (excluding None)
+                values = [entry.get(field) for entry in entries if field in entry]
+
+                # If all files have the same non-None value, move to defaults
+                if values and len(values) == len(entries) and len(set(str(v) for v in values)) == 1:
+                    defaults[field] = values[0]
+
+            # Remove common fields from individual entries
+            if defaults:
+                for entry in entries:
+                    for field in defaults:
+                        entry.pop(field, None)
+
         # Create YAML structure
-        yaml_data = {'files': entries}
+        yaml_data = {}
+        if defaults:
+            yaml_data['defaults'] = defaults
+        yaml_data['files'] = entries
 
         # Generate YAML string
         yaml_str = yaml.dump(yaml_data, allow_unicode=True, default_flow_style=False, sort_keys=False)
@@ -367,6 +389,9 @@ class Tagger:
             self.log("Error: YAML file must contain 'files' key")
             sys.exit(1)
 
+        # Get defaults if present
+        defaults = data.get('defaults', {})
+
         files_data = data['files']
         self.log(f"Processing {len(files_data)} file(s) from {yaml_file}")
 
@@ -382,11 +407,14 @@ class Tagger:
                 self.log(f"Warning: File not found: {original_filename}")
                 continue
 
+            # Merge defaults with file-specific data (file-specific takes priority)
+            merged_data = {**defaults, **file_data}
+
             # Write tags
-            self.write_tags(filepath, file_data)
+            self.write_tags(filepath, merged_data)
 
             # Generate new filename
-            new_filename = self.generate_filename(file_data)
+            new_filename = self.generate_filename(merged_data)
 
             # Rename file if needed
             new_path = self.rename_file(filepath, new_filename)
