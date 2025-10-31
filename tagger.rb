@@ -4,7 +4,7 @@ class Tagger < Formula
   desc "Audio file tag and filename manager using mutagen"
   homepage "https://github.com/delphinus/homebrew-tagger"
   url "https://github.com/delphinus/homebrew-tagger/archive/refs/tags/v1.2.2.tar.gz"
-  sha256 ""
+  sha256 "ba612730c31cbf9a7c0d5a398025aa081781df9f52ed0e973023dda81b33d31c"
   license "MIT"
 
   depends_on "ffmpeg"
