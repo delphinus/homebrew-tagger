@@ -34,8 +34,8 @@ pip install -e .
 
 ```bash
 # Clone the repository
-git clone https://github.com/delphinus/tagger.git
-cd tagger
+git clone https://github.com/delphinus/homebrew-tagger.git
+cd homebrew-tagger
 
 # Install dependencies
 pip install -r requirements.txt
@@ -226,4 +226,4 @@ delphinus
 
 ## Repository
 
-https://github.com/delphinus/tagger
+https://github.com/delphinus/homebrew-tagger
