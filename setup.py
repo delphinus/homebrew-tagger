@@ -10,7 +10,7 @@ with open('README.md', 'r', encoding='utf-8') as f:
 
 setup(
     name='tagger',
-    version='1.2.3',
+    version='1.2.4',
     description='Audio file tag and filename manager using mutagen',
     long_description=long_description,
     long_description_content_type='text/markdown',
@@ -22,14 +22,12 @@ setup(
         'mutagen>=1.45.0',
         'PyYAML>=6.0',
     ],
-    python_requires='>=3.7',
+    python_requires='>=3.9',
     classifiers=[
         'Development Status :: 4 - Beta',
         'Intended Audience :: End Users/Desktop',
         'License :: OSI Approved :: MIT License',
         'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.7',
-        'Programming Language :: Python :: 3.8',
         'Programming Language :: Python :: 3.9',
         'Programming Language :: Python :: 3.10',
         'Programming Language :: Python :: 3.11',

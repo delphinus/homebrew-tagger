@@ -13,7 +13,6 @@ import sys
 import subprocess
 import shutil
 from pathlib import Path
-from typing import Dict, List, Optional, Any
 import yaml
 
 try:
@@ -40,7 +39,7 @@ class Tagger:
         prefix = "[DRY-RUN] " if self.dry_run else ""
         print(f"{prefix}{message}")
 
-    def find_audio_files(self, directory: str = ".") -> List[Path]:
+    def find_audio_files(self, directory: str = ".") -> list[Path]:
         """Find all supported audio files in the directory"""
         path = Path(directory)
         files = []
@@ -52,7 +51,7 @@ class Tagger:
         """Check if ffmpeg is available"""
         return shutil.which('ffmpeg') is not None
 
-    def convert_aac_to_m4a(self, aac_file: Path) -> Optional[Path]:
+    def convert_aac_to_m4a(self, aac_file: Path) -> Path | None:
         """Convert AAC file to M4A format without re-encoding (lossless container conversion)"""
         if not self.check_ffmpeg():
             self.log("Warning: ffmpeg not found. Cannot convert .aac files to .m4a")
@@ -86,7 +85,7 @@ class Tagger:
             self.log(f"Error: Could not convert {aac_file}: {e}")
             return None
 
-    def find_and_convert_aac_files(self, directory: str = ".") -> List[Path]:
+    def find_and_convert_aac_files(self, directory: str = ".") -> list[Path]:
         """Find all .aac files and convert them to .m4a"""
         path = Path(directory)
         aac_files = list(path.glob("*.aac"))
@@ -104,7 +103,7 @@ class Tagger:
 
         return converted_files
 
-    def parse_filename(self, filename: str) -> Dict[str, Any]:
+    def parse_filename(self, filename: str) -> dict[str, any]:
         """Parse metadata from filename
 
         Supported patterns:
@@ -178,7 +177,7 @@ class Tagger:
             'title': title if title else None,
         }
 
-    def read_tags(self, filepath: Path) -> Dict[str, Any]:
+    def read_tags(self, filepath: Path) -> dict[str, any]:
         """Read tags from an audio file"""
         ext = filepath.suffix.lower()
         tags = {
@@ -264,7 +263,7 @@ class Tagger:
 
         return tags
 
-    def write_tags(self, filepath: Path, tags: Dict[str, Any]) -> bool:
+    def write_tags(self, filepath: Path, tags: dict[str, any]) -> bool:
         """Write tags to an audio file"""
         ext = filepath.suffix.lower()
 
@@ -363,7 +362,7 @@ class Tagger:
             name = name.replace(char, '_')
         return name
 
-    def generate_filename(self, tags: Dict[str, Any]) -> str:
+    def generate_filename(self, tags: dict[str, any]) -> str:
         """Generate filename from tags"""
         track = tags.get('track', '')
         artist = tags.get('artist', '')
@@ -390,7 +389,7 @@ class Tagger:
 
         return self.sanitize_filename(filename)
 
-    def rename_file(self, old_path: Path, new_filename: str) -> Optional[Path]:
+    def rename_file(self, old_path: Path, new_filename: str) -> Path | None:
         """Rename a file"""
         new_path = old_path.parent / new_filename
 
@@ -504,7 +503,7 @@ class Tagger:
                 continue
 
             # Merge defaults with file-specific data (file-specific takes priority)
-            merged_data = {**defaults, **file_data}
+            merged_data = defaults | file_data
 
             # Write tags
             self.write_tags(filepath, merged_data)

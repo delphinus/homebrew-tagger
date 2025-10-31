@@ -51,7 +51,7 @@ ln -s $(pwd)/tagger /usr/local/bin/tagger
 
 ## Requirements
 
-- Python 3.7 or later
+- Python 3.9 or later
 - [mutagen](https://mutagen.readthedocs.io/) (automatically installed)
 - [PyYAML](https://pyyaml.org/) (automatically installed)
 - [ffmpeg](https://ffmpeg.org/) (optional, required for .aac to .m4a conversion)
