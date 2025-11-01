@@ -9,26 +9,110 @@ It can also convert .aac files to .m4a format (lossless container conversion).
 import argparse
 import os
 import re
-import sys
-import subprocess
 import shutil
+import subprocess
+import sys
 from pathlib import Path
+
 import yaml
 
 try:
+    from mutagen.id3 import APIC, ID3, TALB, TCMP, TCON, TDRC, TIT2, TPE1, TPE2, TRCK
     from mutagen.mp3 import MP3
-    from mutagen.mp4 import MP4
-    from mutagen.id3 import ID3, APIC, TIT2, TPE1, TALB, TPE2, TDRC, TCON, TRCK, TCMP
-    from mutagen.mp4 import MP4Cover
+    from mutagen.mp4 import MP4, MP4Cover
 except ImportError:
-    print("Error: mutagen is not installed. Please install it with: pip install mutagen", file=sys.stderr)
+    print(
+        "Error: mutagen is not installed. Please install it with: pip install mutagen",
+        file=sys.stderr,
+    )
     sys.exit(1)
+
+try:
+    from pydantic import BaseModel, Field, ValidationError, field_validator
+except ImportError:
+    print(
+        "Error: pydantic is not installed. Please install it with: pip install pydantic",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+
+
+# Pydantic models for YAML schema validation
+class Defaults(BaseModel):
+    """Default values applied to all files"""
+
+    model_config = {"extra": "forbid"}
+
+    album: str | None = None
+    albumartist: str | None = None
+    genre: str | None = None
+    year: int | None = None
+    artwork: str | None = None
+    compilation: bool | None = None
+
+    @field_validator("year")
+    @classmethod
+    def validate_year(cls, v: int | None) -> int | None:
+        """Validate year is reasonable"""
+        if v is not None and (v < 1900 or v > 2100):
+            raise ValueError("Year must be between 1900 and 2100")
+        return v
+
+
+class FileEntry(BaseModel):
+    """Schema for a single file entry in the YAML"""
+
+    model_config = {"extra": "forbid"}
+
+    filename: str = Field(..., description="Original filename")
+    track: int | None = None
+    artist: str | None = None
+    title: str | None = None
+    album: str | None = None
+    albumartist: str | None = None
+    genre: str | None = None
+    year: int | None = None
+    artwork: str | None = None
+    compilation: bool | None = None
+
+    @field_validator("track")
+    @classmethod
+    def validate_track(cls, v: int | None) -> int | None:
+        """Validate track number is positive"""
+        if v is not None and v < 1:
+            raise ValueError("Track number must be positive")
+        return v
+
+    @field_validator("year")
+    @classmethod
+    def validate_year(cls, v: int | None) -> int | None:
+        """Validate year is reasonable"""
+        if v is not None and (v < 1900 or v > 2100):
+            raise ValueError("Year must be between 1900 and 2100")
+        return v
+
+
+class TaggerConfig(BaseModel):
+    """Schema for the complete YAML configuration"""
+
+    model_config = {"extra": "forbid"}
+
+    defaults: Defaults | None = None
+    files: list[FileEntry] = Field(..., min_length=1, description="List of audio files")
+
+    @field_validator("files")
+    @classmethod
+    def validate_files_not_empty(cls, v: list[FileEntry]) -> list[FileEntry]:
+        """Ensure files list is not empty"""
+        if not v:
+            raise ValueError("Files list cannot be empty")
+        return v
 
 
 class Tagger:
     """Main class for managing audio file tags and filenames"""
 
-    SUPPORTED_EXTENSIONS = {'.mp3', '.m4a'}
+    SUPPORTED_EXTENSIONS = {".mp3", ".m4a"}
 
     def __init__(self, execute: bool = False):
         self.execute = execute
@@ -49,7 +133,7 @@ class Tagger:
 
     def check_ffmpeg(self) -> bool:
         """Check if ffmpeg is available"""
-        return shutil.which('ffmpeg') is not None
+        return shutil.which("ffmpeg") is not None
 
     def convert_aac_to_m4a(self, aac_file: Path) -> Path | None:
         """Convert AAC file to M4A format without re-encoding (lossless container conversion)"""
@@ -57,7 +141,7 @@ class Tagger:
             self.log("Warning: ffmpeg not found. Cannot convert .aac files to .m4a")
             return None
 
-        m4a_file = aac_file.with_suffix('.m4a')
+        m4a_file = aac_file.with_suffix(".m4a")
 
         if self.dry_run:
             self.log(f"Would convert: {aac_file.name} -> {m4a_file.name}")
@@ -66,10 +150,10 @@ class Tagger:
         try:
             # Convert container without re-encoding (lossless)
             subprocess.run(
-                ['ffmpeg', '-i', str(aac_file), '-c', 'copy', '-y', str(m4a_file)],
+                ["ffmpeg", "-i", str(aac_file), "-c", "copy", "-y", str(m4a_file)],
                 check=True,
                 capture_output=True,
-                text=True
+                text=True,
             )
             self.log(f"Converted: {aac_file.name} -> {m4a_file.name}")
 
@@ -122,144 +206,148 @@ class Tagger:
 
         # Try patterns in order of specificity (spaces: 1+ allowed)
         # Pattern 1: "01 Artist - Title" (track + artist + title)
-        match = re.match(r'^(\d+)\s+(.+?)\s+-\s+(.+)$', name)
+        match = re.match(r"^(\d+)\s+(.+?)\s+-\s+(.+)$", name)
         if match:
             track = int(match.group(1))
             artist = match.group(2).strip()
             title = match.group(3).strip()
             return {
-                'track': track,
-                'artist': artist if artist else None,
-                'title': title if title else None,
+                "track": track,
+                "artist": artist if artist else None,
+                "title": title if title else None,
             }
 
         # Pattern 2: "01  - Title" (track + title, no artist)
-        match = re.match(r'^(\d+)\s+-\s+(.+)$', name)
+        match = re.match(r"^(\d+)\s+-\s+(.+)$", name)
         if match:
             track = int(match.group(1))
             artist = ""
             title = match.group(2).strip()
             return {
-                'track': track,
-                'artist': None,
-                'title': title if title else None,
+                "track": track,
+                "artist": None,
+                "title": title if title else None,
             }
 
         # Pattern 3: "01 Title" (track + title, no separator)
-        match = re.match(r'^(\d+)\s+(.+)$', name)
+        match = re.match(r"^(\d+)\s+(.+)$", name)
         if match:
             track = int(match.group(1))
             artist = ""
             title = match.group(2).strip()
             return {
-                'track': track,
-                'artist': None,
-                'title': title if title else None,
+                "track": track,
+                "artist": None,
+                "title": title if title else None,
             }
 
         # Pattern 4: "Artist - Title" (artist + title, no track)
-        match = re.match(r'^(.+?)\s+-\s+(.+)$', name)
+        match = re.match(r"^(.+?)\s+-\s+(.+)$", name)
         if match:
             track = None
             artist = match.group(1).strip()
             title = match.group(2).strip()
             return {
-                'track': track,
-                'artist': artist if artist else None,
-                'title': title if title else None,
+                "track": track,
+                "artist": artist if artist else None,
+                "title": title if title else None,
             }
 
         # Pattern 5: "Title" (title only)
         title = name.strip()
         return {
-            'track': None,
-            'artist': None,
-            'title': title if title else None,
+            "track": None,
+            "artist": None,
+            "title": title if title else None,
         }
 
     def read_tags(self, filepath: Path) -> dict[str, any]:
         """Read tags from an audio file"""
         ext = filepath.suffix.lower()
         tags = {
-            'filename': filepath.name,
-            'track': None,
-            'artist': None,
-            'title': None,
-            'album': None,
-            'albumartist': None,
-            'genre': None,
-            'year': None,
-            'artwork': None,
-            'compilation': None,
+            "filename": filepath.name,
+            "track": None,
+            "artist": None,
+            "title": None,
+            "album": None,
+            "albumartist": None,
+            "genre": None,
+            "year": None,
+            "artwork": None,
+            "compilation": None,
         }
 
         try:
-            if ext == '.mp3':
+            if ext == ".mp3":
                 audio = MP3(str(filepath), ID3=ID3)
                 if audio.tags:
                     # Track number
-                    if 'TRCK' in audio.tags:
-                        track_str = str(audio.tags['TRCK'])
-                        tags['track'] = int(track_str.split('/')[0]) if '/' in track_str else int(track_str)
+                    if "TRCK" in audio.tags:
+                        track_str = str(audio.tags["TRCK"])
+                        tags["track"] = (
+                            int(track_str.split("/")[0])
+                            if "/" in track_str
+                            else int(track_str)
+                        )
 
                     # Text fields
-                    if 'TIT2' in audio.tags:
-                        tags['title'] = str(audio.tags['TIT2'])
-                    if 'TPE1' in audio.tags:
-                        tags['artist'] = str(audio.tags['TPE1'])
-                    if 'TALB' in audio.tags:
-                        tags['album'] = str(audio.tags['TALB'])
-                    if 'TPE2' in audio.tags:
-                        tags['albumartist'] = str(audio.tags['TPE2'])
-                    if 'TCON' in audio.tags:
-                        tags['genre'] = str(audio.tags['TCON'])
-                    if 'TDRC' in audio.tags:
-                        tags['year'] = int(str(audio.tags['TDRC']))
-                    if 'TCMP' in audio.tags:
-                        tags['compilation'] = str(audio.tags['TCMP']) == '1'
+                    if "TIT2" in audio.tags:
+                        tags["title"] = str(audio.tags["TIT2"])
+                    if "TPE1" in audio.tags:
+                        tags["artist"] = str(audio.tags["TPE1"])
+                    if "TALB" in audio.tags:
+                        tags["album"] = str(audio.tags["TALB"])
+                    if "TPE2" in audio.tags:
+                        tags["albumartist"] = str(audio.tags["TPE2"])
+                    if "TCON" in audio.tags:
+                        tags["genre"] = str(audio.tags["TCON"])
+                    if "TDRC" in audio.tags:
+                        tags["year"] = int(str(audio.tags["TDRC"]))
+                    if "TCMP" in audio.tags:
+                        tags["compilation"] = str(audio.tags["TCMP"]) == "1"
 
                     # Artwork
-                    if 'APIC:' in audio.tags:
-                        tags['artwork'] = '<embedded>'
+                    if "APIC:" in audio.tags:
+                        tags["artwork"] = "<embedded>"
 
-            elif ext == '.m4a':
+            elif ext == ".m4a":
                 audio = MP4(str(filepath))
                 if audio.tags:
                     # Track number
-                    if '\xa9nam' in audio.tags:
-                        tags['title'] = audio.tags['\xa9nam'][0]
-                    if '\xa9ART' in audio.tags:
-                        tags['artist'] = audio.tags['\xa9ART'][0]
-                    if '\xa9alb' in audio.tags:
-                        tags['album'] = audio.tags['\xa9alb'][0]
-                    if 'aART' in audio.tags:
-                        tags['albumartist'] = audio.tags['aART'][0]
-                    if '\xa9gen' in audio.tags:
-                        tags['genre'] = audio.tags['\xa9gen'][0]
-                    if '\xa9day' in audio.tags:
-                        tags['year'] = int(audio.tags['\xa9day'][0])
-                    if 'trkn' in audio.tags:
-                        tags['track'] = audio.tags['trkn'][0][0]
-                    if 'cpil' in audio.tags:
-                        tags['compilation'] = bool(audio.tags['cpil'][0])
+                    if "\xa9nam" in audio.tags:
+                        tags["title"] = audio.tags["\xa9nam"][0]
+                    if "\xa9ART" in audio.tags:
+                        tags["artist"] = audio.tags["\xa9ART"][0]
+                    if "\xa9alb" in audio.tags:
+                        tags["album"] = audio.tags["\xa9alb"][0]
+                    if "aART" in audio.tags:
+                        tags["albumartist"] = audio.tags["aART"][0]
+                    if "\xa9gen" in audio.tags:
+                        tags["genre"] = audio.tags["\xa9gen"][0]
+                    if "\xa9day" in audio.tags:
+                        tags["year"] = int(audio.tags["\xa9day"][0])
+                    if "trkn" in audio.tags:
+                        tags["track"] = audio.tags["trkn"][0][0]
+                    if "cpil" in audio.tags:
+                        tags["compilation"] = bool(audio.tags["cpil"][0])
 
                     # Artwork
-                    if 'covr' in audio.tags:
-                        tags['artwork'] = '<embedded>'
+                    if "covr" in audio.tags:
+                        tags["artwork"] = "<embedded>"
 
         except Exception as e:
             self.log(f"Warning: Could not read tags from {filepath}: {e}")
 
         # If track, artist, or title is missing, try to parse from filename
-        if tags['track'] is None or tags['artist'] is None or tags['title'] is None:
+        if tags["track"] is None or tags["artist"] is None or tags["title"] is None:
             parsed = self.parse_filename(filepath.name)
 
-            if tags['track'] is None and parsed['track'] is not None:
-                tags['track'] = parsed['track']
-            if tags['artist'] is None and parsed['artist'] is not None:
-                tags['artist'] = parsed['artist']
-            if tags['title'] is None and parsed['title'] is not None:
-                tags['title'] = parsed['title']
+            if tags["track"] is None and parsed["track"] is not None:
+                tags["track"] = parsed["track"]
+            if tags["artist"] is None and parsed["artist"] is not None:
+                tags["artist"] = parsed["artist"]
+            if tags["title"] is None and parsed["title"] is not None:
+                tags["title"] = parsed["title"]
 
         return tags
 
@@ -272,7 +360,7 @@ class Tagger:
             return True
 
         try:
-            if ext == '.mp3':
+            if ext == ".mp3":
                 audio = MP3(str(filepath), ID3=ID3)
 
                 # Create ID3 tag if it doesn't exist
@@ -280,71 +368,86 @@ class Tagger:
                     audio.add_tags()
 
                 # Set tags
-                if tags.get('title'):
-                    audio.tags.add(TIT2(encoding=3, text=tags['title']))
-                if tags.get('artist'):
-                    audio.tags.add(TPE1(encoding=3, text=tags['artist']))
-                if tags.get('album'):
-                    audio.tags.add(TALB(encoding=3, text=tags['album']))
-                if tags.get('albumartist'):
-                    audio.tags.add(TPE2(encoding=3, text=tags['albumartist']))
-                if tags.get('genre'):
-                    audio.tags.add(TCON(encoding=3, text=tags['genre']))
-                if tags.get('year'):
-                    audio.tags.add(TDRC(encoding=3, text=str(tags['year'])))
-                if tags.get('track'):
-                    audio.tags.add(TRCK(encoding=3, text=str(tags['track'])))
-                if tags.get('compilation') is not None:
-                    audio.tags.add(TCMP(encoding=3, text='1' if tags['compilation'] else '0'))
+                if tags.get("title"):
+                    audio.tags.add(TIT2(encoding=3, text=tags["title"]))
+                if tags.get("artist"):
+                    audio.tags.add(TPE1(encoding=3, text=tags["artist"]))
+                if tags.get("album"):
+                    audio.tags.add(TALB(encoding=3, text=tags["album"]))
+                if tags.get("albumartist"):
+                    audio.tags.add(TPE2(encoding=3, text=tags["albumartist"]))
+                if tags.get("genre"):
+                    audio.tags.add(TCON(encoding=3, text=tags["genre"]))
+                if tags.get("year"):
+                    audio.tags.add(TDRC(encoding=3, text=str(tags["year"])))
+                if tags.get("track"):
+                    audio.tags.add(TRCK(encoding=3, text=str(tags["track"])))
+                if tags.get("compilation") is not None:
+                    audio.tags.add(
+                        TCMP(encoding=3, text="1" if tags["compilation"] else "0")
+                    )
 
                 # Artwork
-                if tags.get('artwork') and tags['artwork'] != '<embedded>':
-                    artwork_path = Path(tags['artwork'])
+                if tags.get("artwork") and tags["artwork"] != "<embedded>":
+                    artwork_path = Path(tags["artwork"])
                     if artwork_path.exists():
-                        with open(artwork_path, 'rb') as f:
+                        with open(artwork_path, "rb") as f:
                             audio.tags.add(
                                 APIC(
                                     encoding=3,
-                                    mime='image/jpeg' if artwork_path.suffix.lower() in ['.jpg', '.jpeg'] else 'image/png',
+                                    mime=(
+                                        "image/jpeg"
+                                        if artwork_path.suffix.lower()
+                                        in [".jpg", ".jpeg"]
+                                        else "image/png"
+                                    ),
                                     type=3,  # Cover (front)
-                                    desc='Cover',
-                                    data=f.read()
+                                    desc="Cover",
+                                    data=f.read(),
                                 )
                             )
 
                 audio.save()
 
-            elif ext == '.m4a':
+            elif ext == ".m4a":
                 audio = MP4(str(filepath))
 
                 # Set tags
-                if tags.get('title'):
-                    audio.tags['\xa9nam'] = tags['title']
-                if tags.get('artist'):
-                    audio.tags['\xa9ART'] = tags['artist']
-                if tags.get('album'):
-                    audio.tags['\xa9alb'] = tags['album']
-                if tags.get('albumartist'):
-                    audio.tags['aART'] = tags['albumartist']
-                if tags.get('genre'):
-                    audio.tags['\xa9gen'] = tags['genre']
-                if tags.get('year'):
-                    audio.tags['\xa9day'] = str(tags['year'])
-                if tags.get('track'):
-                    audio.tags['trkn'] = [(tags['track'], 0)]
-                if tags.get('compilation') is not None:
-                    audio.tags['cpil'] = [tags['compilation']]
+                if tags.get("title"):
+                    audio.tags["\xa9nam"] = tags["title"]
+                if tags.get("artist"):
+                    audio.tags["\xa9ART"] = tags["artist"]
+                if tags.get("album"):
+                    audio.tags["\xa9alb"] = tags["album"]
+                if tags.get("albumartist"):
+                    audio.tags["aART"] = tags["albumartist"]
+                if tags.get("genre"):
+                    audio.tags["\xa9gen"] = tags["genre"]
+                if tags.get("year"):
+                    audio.tags["\xa9day"] = str(tags["year"])
+                if tags.get("track"):
+                    audio.tags["trkn"] = [(tags["track"], 0)]
+                if tags.get("compilation") is not None:
+                    audio.tags["cpil"] = [tags["compilation"]]
 
                 # Artwork
-                if tags.get('artwork') and tags['artwork'] != '<embedded>':
-                    artwork_path = Path(tags['artwork'])
+                if tags.get("artwork") and tags["artwork"] != "<embedded>":
+                    artwork_path = Path(tags["artwork"])
                     if artwork_path.exists():
-                        with open(artwork_path, 'rb') as f:
+                        with open(artwork_path, "rb") as f:
                             cover_data = f.read()
-                            if artwork_path.suffix.lower() == '.png':
-                                audio.tags['covr'] = [MP4Cover(cover_data, imageformat=MP4Cover.FORMAT_PNG)]
+                            if artwork_path.suffix.lower() == ".png":
+                                audio.tags["covr"] = [
+                                    MP4Cover(
+                                        cover_data, imageformat=MP4Cover.FORMAT_PNG
+                                    )
+                                ]
                             else:
-                                audio.tags['covr'] = [MP4Cover(cover_data, imageformat=MP4Cover.FORMAT_JPEG)]
+                                audio.tags["covr"] = [
+                                    MP4Cover(
+                                        cover_data, imageformat=MP4Cover.FORMAT_JPEG
+                                    )
+                                ]
 
                 audio.save()
 
@@ -359,17 +462,17 @@ class Tagger:
         """Sanitize filename by removing invalid characters"""
         invalid_chars = '<>:"/\\|?*'
         for char in invalid_chars:
-            name = name.replace(char, '_')
+            name = name.replace(char, "_")
         return name
 
     def generate_filename(self, tags: dict[str, any]) -> str:
         """Generate filename from tags"""
-        track = tags.get('track', '')
-        artist = tags.get('artist', '')
-        title = tags.get('title', 'Unknown Title')
+        track = tags.get("track", "")
+        artist = tags.get("artist", "")
+        title = tags.get("title", "Unknown Title")
 
         # Get original extension
-        original_filename = tags.get('filename', '.mp3')
+        original_filename = tags.get("filename", ".mp3")
         ext = Path(original_filename).suffix
 
         # Build filename based on available metadata
@@ -430,7 +533,14 @@ class Tagger:
             entries.append(entry)
 
         # Extract common fields to defaults
-        common_fields = ['album', 'albumartist', 'genre', 'year', 'artwork', 'compilation']
+        common_fields = [
+            "album",
+            "albumartist",
+            "genre",
+            "year",
+            "artwork",
+            "compilation",
+        ]
         defaults = {}
 
         if len(entries) > 1:  # Only extract defaults if there are multiple files
@@ -439,7 +549,11 @@ class Tagger:
                 values = [entry.get(field) for entry in entries if field in entry]
 
                 # If all files have the same non-None value, move to defaults
-                if values and len(values) == len(entries) and len(set(str(v) for v in values)) == 1:
+                if (
+                    values
+                    and len(values) == len(entries)
+                    and len(set(str(v) for v in values)) == 1
+                ):
                     defaults[field] = values[0]
 
             # Remove common fields from individual entries
@@ -451,19 +565,33 @@ class Tagger:
         # Create YAML structure
         yaml_data = {}
         if defaults:
-            yaml_data['defaults'] = defaults
-        yaml_data['files'] = entries
+            yaml_data["defaults"] = defaults
+        yaml_data["files"] = entries
+
+        # Validate YAML structure
+        try:
+            config = TaggerConfig(**yaml_data)
+            # Convert back to dict for YAML serialization
+            yaml_data = config.model_dump(exclude_none=True, mode="python")
+        except ValidationError as e:
+            self.log(f"Error: Generated YAML validation failed:")
+            for error in e.errors():
+                field = " -> ".join(str(x) for x in error["loc"])
+                self.log(f"  {field}: {error['msg']}")
+            sys.exit(1)
 
         # Generate YAML string
-        yaml_str = yaml.dump(yaml_data, allow_unicode=True, default_flow_style=False, sort_keys=False)
+        yaml_str = yaml.dump(
+            yaml_data, allow_unicode=True, default_flow_style=False, sort_keys=False
+        )
 
         if self.dry_run:
             self.log(f"Would create {output_file} with content:")
-            print("\n" + "="*60)
+            print("\n" + "=" * 60)
             print(yaml_str)
-            print("="*60)
+            print("=" * 60)
         else:
-            with open(output_file, 'w', encoding='utf-8') as f:
+            with open(output_file, "w", encoding="utf-8") as f:
                 f.write(yaml_str)
             self.log(f"Created {output_file}")
 
@@ -477,25 +605,46 @@ class Tagger:
             sys.exit(1)
 
         # Load YAML
-        with open(yaml_file, 'r', encoding='utf-8') as f:
+        with open(yaml_file, "r", encoding="utf-8") as f:
             data = yaml.safe_load(f)
 
-        if 'files' not in data:
-            self.log("Error: YAML file must contain 'files' key")
+        # Validate YAML structure
+        try:
+            config = TaggerConfig(**data)
+            self.log("YAML validation successful")
+        except ValidationError as e:
+            self.log(f"Error: YAML validation failed for {yaml_file}:")
+            for error in e.errors():
+                field = " -> ".join(str(x) for x in error["loc"])
+                self.log(f"  {field}: {error['msg']}")
+            self.log("\nCommon issues:")
+            self.log(
+                "  - Check for typos in field names (e.g., 'default' should be 'defaults')"
+            )
+            self.log("  - Ensure all required fields are present")
+            self.log(
+                "  - Verify data types (e.g., year should be a number, not a string)"
+            )
             sys.exit(1)
 
         # Get defaults if present
-        defaults = data.get('defaults', {})
+        defaults = (
+            config.defaults.model_dump(exclude_none=True, mode="python")
+            if config.defaults
+            else {}
+        )
 
-        files_data = data['files']
+        files_data = [
+            f.model_dump(exclude_none=True, mode="python") for f in config.files
+        ]
         self.log(f"Processing {len(files_data)} file(s) from {yaml_file}")
 
         for file_data in files_data:
-            if 'filename' not in file_data:
+            if "filename" not in file_data:
                 self.log("Warning: Skipping entry without 'filename'")
                 continue
 
-            original_filename = file_data['filename']
+            original_filename = file_data["filename"]
             filepath = Path(original_filename)
 
             if not filepath.exists():
@@ -516,18 +665,24 @@ class Tagger:
 
             # Update YAML entry with new filename for future reference
             if new_path and not self.dry_run:
-                file_data['filename'] = new_path.name
+                file_data["filename"] = new_path.name
 
         # Update YAML file with new filenames
         if not self.dry_run:
-            with open(yaml_file, 'w', encoding='utf-8') as f:
-                yaml.dump(data, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
+            with open(yaml_file, "w", encoding="utf-8") as f:
+                yaml.dump(
+                    data,
+                    f,
+                    allow_unicode=True,
+                    default_flow_style=False,
+                    sort_keys=False,
+                )
             self.log(f"Updated {yaml_file} with new filenames")
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Manage audio file tags and filenames using mutagen',
+        description="Manage audio file tags and filenames using mutagen",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -542,25 +697,27 @@ Examples:
 
   # Apply tags from YAML and execute
   tagger --execute tagger.yaml
-        """
+        """,
     )
 
     parser.add_argument(
-        'yaml_file',
-        nargs='?',
-        help='YAML file with tag information (if not provided, generates YAML from current directory)'
+        "yaml_file",
+        nargs="?",
+        help="YAML file with tag information (if not provided, generates YAML from current directory)",
     )
 
     parser.add_argument(
-        '-e', '--execute',
-        action='store_true',
-        help='Execute changes (default is dry-run mode)'
+        "-e",
+        "--execute",
+        action="store_true",
+        help="Execute changes (default is dry-run mode)",
     )
 
     parser.add_argument(
-        '-o', '--output',
-        default='tagger.yaml',
-        help='Output YAML file name when generating (default: tagger.yaml)'
+        "-o",
+        "--output",
+        default="tagger.yaml",
+        help="Output YAML file name when generating (default: tagger.yaml)",
     )
 
     args = parser.parse_args()
@@ -575,5 +732,5 @@ Examples:
         tagger.generate_yaml(args.output)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

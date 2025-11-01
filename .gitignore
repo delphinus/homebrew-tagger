@@ -131,3 +131,7 @@ tagger.yaml
 *.m4a
 *.jpg
 *.png
+
+# But keep test fixtures
+!tests/fixtures/*.mp3
+!tests/fixtures/*.m4a
