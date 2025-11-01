@@ -1,0 +1,150 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., 1.2.6)'
+        required: true
+        type: string
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.PAT_TOKEN }}
+        fetch-depth: 0
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Configure Git
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+
+    - name: Validate version format
+      run: |
+        if ! [[ "${{ inputs.version }}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          echo "Error: Version must be in format X.Y.Z (e.g., 1.2.6)"
+          exit 1
+        fi
+
+    - name: Check if version already exists
+      run: |
+        if git rev-parse "v${{ inputs.version }}" >/dev/null 2>&1; then
+          echo "Error: Version v${{ inputs.version }} already exists"
+          exit 1
+        fi
+
+    - name: Update version in setup.py
+      run: |
+        sed -i 's/version="[0-9.]*"/version="${{ inputs.version }}"/' setup.py
+        git diff setup.py
+
+    - name: Commit version bump
+      run: |
+        git add setup.py
+        git commit -m "chore: bump version to ${{ inputs.version }}"
+
+    - name: Create and push tag
+      run: |
+        git tag -a "v${{ inputs.version }}" -m "Release v${{ inputs.version }}"
+        git push origin "v${{ inputs.version }}"
+
+    - name: Create GitHub Release
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        gh release create "v${{ inputs.version }}" \
+          --title "v${{ inputs.version }}" \
+          --generate-notes
+
+    - name: Download release tarball and calculate SHA256
+      run: |
+        sleep 5  # Wait for GitHub to generate tarball
+        curl -sL "https://github.com/${{ github.repository }}/archive/refs/tags/v${{ inputs.version }}.tar.gz" -o release.tar.gz
+        SHA256=$(shasum -a 256 release.tar.gz | awk '{print $1}')
+        echo "SHA256=${SHA256}" >> $GITHUB_ENV
+        echo "Calculated SHA256: ${SHA256}"
+
+    - name: Update Homebrew Formula
+      run: |
+        cat > tagger.rb << 'EOF'
+        class Tagger < Formula
+          include Language::Python::Virtualenv
+
+          desc "Audio file tag and filename manager using mutagen"
+          homepage "https://github.com/${{ github.repository }}"
+          url "https://github.com/${{ github.repository }}/archive/refs/tags/v${{ inputs.version }}.tar.gz"
+          sha256 "${{ env.SHA256 }}"
+          license "MIT"
+
+          depends_on "python@3.12"
+          depends_on "ffmpeg"
+
+          resource "mutagen" do
+            url "https://files.pythonhosted.org/packages/81/e6/64bc71b74eef4b68e61eb921dcf72dabd9e4ec4af1e11891bbd312ccbb77/mutagen-1.47.0.tar.gz"
+            sha256 "719fadef0a978c31b4cf3c956261b3c58b6948b32023078a2117b1de09f0fc99"
+          end
+
+          resource "pydantic" do
+            url "https://files.pythonhosted.org/packages/70/7e/fb60e6fee04d0ef8f15e4e01ff187a196fa976eb0f0ab524af4599e5754c/pydantic-2.10.3.tar.gz"
+            sha256 "cb5ac360ce894ceacd69c403187900a02c4b20b693a9dd1d643e1effab9eadf9"
+          end
+
+          resource "pydantic-core" do
+            url "https://files.pythonhosted.org/packages/fc/01/f3e5ac0589ff8e55be7478e6cad92fb144477e20f07029a3aecbfd4818f8/pydantic_core-2.27.1.tar.gz"
+            sha256 "62a763352879b84aa31058fc931884055fd75089cccbd9d58bb6afd01141b235"
+          end
+
+          resource "pyyaml" do
+            url "https://files.pythonhosted.org/packages/54/ed/79a089b6be93607fa5cdaedf301d7dfb23af5f25c398d5ead2525b063e17/pyyaml-6.0.2.tar.gz"
+            sha256 "d584d9ec91ad65861cc08d42e834324ef890a082e591037abe114850ff7bbc3e"
+          end
+
+          resource "annotated-types" do
+            url "https://files.pythonhosted.org/packages/ee/67/531ea369ba64dcff5ec9c3402f9f51bf748cec26dde048a2f973a4eea7f5/annotated_types-0.7.0.tar.gz"
+            sha256 "aff07c09a53a08bc8cfccb9c85b05f1aa9a2a6f23728d790723543408344ce89"
+          end
+
+          resource "typing-extensions" do
+            url "https://files.pythonhosted.org/packages/df/db/f35a00659bc03fec321ba8bce9420de607a1d37f8342eee1863174c69557/typing_extensions-4.12.2.tar.gz"
+            sha256 "1a7ead55c7e559dd4dee8856e3a88b41225abfe1ce8df57b7c13915fe121ffb8"
+          end
+
+          def install
+            virtualenv_install_with_resources
+          end
+
+          test do
+            system bin/"tagger", "--help"
+          end
+        end
+        EOF
+
+        git diff tagger.rb
+
+    - name: Commit and push Formula update
+      run: |
+        git add tagger.rb
+        git commit -m "chore: update tagger.rb with v${{ inputs.version }} SHA256"
+        git push origin main
+
+    - name: Release Summary
+      run: |
+        echo "✅ Release v${{ inputs.version }} completed successfully!"
+        echo ""
+        echo "📦 Release URL: https://github.com/${{ github.repository }}/releases/tag/v${{ inputs.version }}"
+        echo "🔑 SHA256: ${{ env.SHA256 }}"
+        echo ""
+        echo "To install with Homebrew:"
+        echo "  brew tap delphinus/delphinus"
+        echo "  brew install tagger"
