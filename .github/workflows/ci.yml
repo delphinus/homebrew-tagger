@@ -57,10 +57,10 @@ jobs:
       continue-on-error: true
 
     - name: Run syntax check
-      run: python -m py_compile tagger/*.py setup.py
+      run: python -m py_compile tagger setup.py
 
     - name: Test import
-      run: python -c "import sys; sys.path.insert(0, '.'); from tagger import cli"
+      run: python -c "import sys; sys.path.insert(0, '.'); exec(open('tagger').read())"
       continue-on-error: true
 
   all-checks-passed:
