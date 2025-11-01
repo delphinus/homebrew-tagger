@@ -11,7 +11,15 @@ class Tagger < Formula
   depends_on "ffmpeg"
 
   def install
-    virtualenv_install_with_resources
+    virtualenv_create(libexec, "python3.12")
+    system libexec/"bin/pip", "install", "-v", "--no-deps",
+           "--ignore-installed",
+           buildpath
+    system libexec/"bin/pip", "install", "-v",
+           "mutagen>=1.45.0",
+           "PyYAML>=6.0",
+           "pydantic>=2.0.0"
+    bin.install_symlink libexec/"bin/tagger"
   end
 
   test do
