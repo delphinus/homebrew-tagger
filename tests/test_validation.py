@@ -1,10 +1,11 @@
 """Tests for Pydantic schema validation"""
-import pytest
-from pydantic import ValidationError
+
 import sys
 
+import pytest
 # Import tagger module (loaded by conftest.py)
 import tagger_module
+from pydantic import ValidationError
 
 # Import classes from the module
 Defaults = tagger_module.Defaults
@@ -19,10 +20,7 @@ class TestDefaultsValidation:
     def test_valid_defaults(self):
         """Test valid defaults configuration"""
         defaults = Defaults(
-            album="Test Album",
-            albumartist="Test Artist",
-            year=2024,
-            genre="Rock"
+            album="Test Album", albumartist="Test Artist", year=2024, genre="Rock"
         )
         assert defaults.album == "Test Album"
         assert defaults.year == 2024
@@ -33,7 +31,9 @@ class TestDefaultsValidation:
             Defaults(year=1899)
 
         errors = exc_info.value.errors()
-        assert any('Year must be between 1900 and 2100' in str(e['msg']) for e in errors)
+        assert any(
+            "Year must be between 1900 and 2100" in str(e["msg"]) for e in errors
+        )
 
     def test_year_too_future(self):
         """Test that year after 2100 is rejected"""
@@ -41,7 +41,9 @@ class TestDefaultsValidation:
             Defaults(year=2101)
 
         errors = exc_info.value.errors()
-        assert any('Year must be between 1900 and 2100' in str(e['msg']) for e in errors)
+        assert any(
+            "Year must be between 1900 and 2100" in str(e["msg"]) for e in errors
+        )
 
     def test_extra_field_rejected(self):
         """Test that extra fields are rejected"""
@@ -49,7 +51,7 @@ class TestDefaultsValidation:
             Defaults(unknown_field="value")
 
         errors = exc_info.value.errors()
-        assert any('extra' in str(e['type']).lower() for e in errors)
+        assert any("extra" in str(e["type"]).lower() for e in errors)
 
 
 class TestFileEntryValidation:
@@ -58,10 +60,7 @@ class TestFileEntryValidation:
     def test_valid_file_entry(self):
         """Test valid file entry"""
         entry = FileEntry(
-            filename="01 Artist - Title.mp3",
-            track=1,
-            artist="Artist",
-            title="Title"
+            filename="01 Artist - Title.mp3", track=1, artist="Artist", title="Title"
         )
         assert entry.filename == "01 Artist - Title.mp3"
         assert entry.track == 1
@@ -72,7 +71,7 @@ class TestFileEntryValidation:
             FileEntry(track=1, title="Test")
 
         errors = exc_info.value.errors()
-        assert any('filename' in str(e['loc']) for e in errors)
+        assert any("filename" in str(e["loc"]) for e in errors)
 
     def test_track_must_be_positive(self):
         """Test that track number must be positive"""
@@ -80,7 +79,7 @@ class TestFileEntryValidation:
             FileEntry(filename="test.mp3", track=0)
 
         errors = exc_info.value.errors()
-        assert any('Track number must be positive' in str(e['msg']) for e in errors)
+        assert any("Track number must be positive" in str(e["msg"]) for e in errors)
 
     def test_negative_track_rejected(self):
         """Test that negative track number is rejected"""
@@ -88,7 +87,7 @@ class TestFileEntryValidation:
             FileEntry(filename="test.mp3", track=-1)
 
         errors = exc_info.value.errors()
-        assert any('Track number must be positive' in str(e['msg']) for e in errors)
+        assert any("Track number must be positive" in str(e["msg"]) for e in errors)
 
 
 class TestTaggerConfigValidation:
@@ -101,7 +100,7 @@ class TestTaggerConfigValidation:
             files=[
                 FileEntry(filename="01.mp3", track=1, title="Track 1"),
                 FileEntry(filename="02.mp3", track=2, title="Track 2"),
-            ]
+            ],
         )
         assert config.defaults.album == "Test Album"
         assert len(config.files) == 2
@@ -112,7 +111,7 @@ class TestTaggerConfigValidation:
             TaggerConfig()
 
         errors = exc_info.value.errors()
-        assert any('files' in str(e['loc']) for e in errors)
+        assert any("files" in str(e["loc"]) for e in errors)
 
     def test_empty_files_rejected(self):
         """Test that empty files list is rejected"""
@@ -120,24 +119,22 @@ class TestTaggerConfigValidation:
             TaggerConfig(files=[])
 
         errors = exc_info.value.errors()
-        assert any('files' in str(e['loc']) for e in errors)
+        assert any("files" in str(e["loc"]) for e in errors)
 
     def test_typo_in_defaults_rejected(self):
         """Test that typo 'default' instead of 'defaults' is rejected"""
         with pytest.raises(ValidationError) as exc_info:
             TaggerConfig(
                 default={"album": "Test"},  # Typo: should be 'defaults'
-                files=[FileEntry(filename="test.mp3", title="Test")]
+                files=[FileEntry(filename="test.mp3", title="Test")],
             )
 
         errors = exc_info.value.errors()
         # Should reject 'default' as extra field
-        assert any('extra' in str(e['type']).lower() for e in errors)
+        assert any("extra" in str(e["type"]).lower() for e in errors)
 
     def test_config_without_defaults(self):
         """Test that defaults is optional"""
-        config = TaggerConfig(
-            files=[FileEntry(filename="test.mp3", title="Test")]
-        )
+        config = TaggerConfig(files=[FileEntry(filename="test.mp3", title="Test")])
         assert config.defaults is None
         assert len(config.files) == 1
