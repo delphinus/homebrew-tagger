@@ -20,11 +20,6 @@ class Tagger < Formula
     sha256 "cb5ac360ce894ceacd69c403187900a02c4b20b693a9dd1d643e1effab9eadf9"
   end
 
-  resource "pydantic-core" do
-    url "https://files.pythonhosted.org/packages/a6/9f/7de1f19b6aea45aeb441838782d68352e71bfa98ee6fa048d5041991b33e/pydantic_core-2.27.1.tar.gz"
-    sha256 "62a763352879b84aa31058fc931884055fd75089cccbd9d58bb6afd01141b235"
-  end
-
   resource "pyyaml" do
     url "https://files.pythonhosted.org/packages/54/ed/79a089b6be93607fa5cdaedf301d7dfb23af5f25c398d5ead2525b063e17/pyyaml-6.0.2.tar.gz"
     sha256 "d584d9ec91ad65861cc08d42e834324ef890a082e591037abe114850ff7bbc3e"
