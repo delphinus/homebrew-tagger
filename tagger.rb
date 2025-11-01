@@ -52,7 +52,13 @@ class Tagger < Formula
   def install
     # Create virtualenv and install resources
     venv = virtualenv_create(libexec, "python3.12")
-    venv.pip_install resources
+
+    # Install non-wheel resources (source tarballs)
+    venv.pip_install resources.reject { |r| r.name == "pydantic-core" }
+
+    # Install pydantic-core wheel directly
+    pydantic_core_resource = resources.find { |r| r.name == "pydantic-core" }
+    venv.pip_install pydantic_core_resource.url
 
     # Rewrite shebang in tagger script to use virtualenv python
     inreplace "tagger", %r{^#!/usr/bin/env python3$}, "#!#{libexec}/bin/python"
