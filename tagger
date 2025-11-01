@@ -17,8 +17,7 @@ from pathlib import Path
 import yaml
 
 try:
-    from mutagen.id3 import (APIC, ID3, TALB, TCMP, TCON, TDRC, TIT2, TPE1,
-                             TPE2, TRCK)
+    from mutagen.id3 import APIC, ID3, TALB, TCMP, TCON, TDRC, TIT2, TPE1, TPE2, TRCK
     from mutagen.mp3 import MP3
     from mutagen.mp4 import MP4, MP4Cover
 except ImportError:

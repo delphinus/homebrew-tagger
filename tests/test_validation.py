@@ -3,6 +3,7 @@
 import sys
 
 import pytest
+
 # Import tagger module (loaded by conftest.py)
 import tagger_module
 from pydantic import ValidationError
