@@ -20,6 +20,7 @@ jobs:
     - name: Set up Homebrew
       run: |
         echo "Homebrew version: $(brew --version)"
+        brew update
 
     - name: Create local tap
       run: |
