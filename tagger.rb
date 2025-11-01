@@ -9,6 +9,7 @@ class Tagger < Formula
 
   depends_on "python@3.12"
   depends_on "ffmpeg"
+  depends_on "rust" => :build
 
   resource "typing-extensions" do
     url "https://files.pythonhosted.org/packages/72/94/1a15dd82efb362ac84269196e94cf00f187f7ed21c242792a923cdb1c61f/typing_extensions-4.15.0.tar.gz"
