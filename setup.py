@@ -21,7 +21,14 @@ setup(
     install_requires=[
         'mutagen>=1.45.0',
         'PyYAML>=6.0',
+        'pydantic>=2.0.0',
     ],
+    extras_require={
+        'test': [
+            'pytest>=7.0.0',
+            'pytest-cov>=4.0.0',
+        ],
+    },
     python_requires='>=3.9',
     classifiers=[
         'Development Status :: 4 - Beta',

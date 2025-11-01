@@ -24,6 +24,81 @@ except ImportError:
     print("Error: mutagen is not installed. Please install it with: pip install mutagen", file=sys.stderr)
     sys.exit(1)
 
+try:
+    from pydantic import BaseModel, Field, ValidationError, field_validator
+except ImportError:
+    print("Error: pydantic is not installed. Please install it with: pip install pydantic", file=sys.stderr)
+    sys.exit(1)
+
+
+# Pydantic models for YAML schema validation
+class Defaults(BaseModel):
+    """Default values applied to all files"""
+    model_config = {'extra': 'forbid'}
+
+    album: str | None = None
+    albumartist: str | None = None
+    genre: str | None = None
+    year: int | None = None
+    artwork: str | None = None
+    compilation: bool | None = None
+
+    @field_validator('year')
+    @classmethod
+    def validate_year(cls, v: int | None) -> int | None:
+        """Validate year is reasonable"""
+        if v is not None and (v < 1900 or v > 2100):
+            raise ValueError('Year must be between 1900 and 2100')
+        return v
+
+
+class FileEntry(BaseModel):
+    """Schema for a single file entry in the YAML"""
+    model_config = {'extra': 'forbid'}
+
+    filename: str = Field(..., description="Original filename")
+    track: int | None = None
+    artist: str | None = None
+    title: str | None = None
+    album: str | None = None
+    albumartist: str | None = None
+    genre: str | None = None
+    year: int | None = None
+    artwork: str | None = None
+    compilation: bool | None = None
+
+    @field_validator('track')
+    @classmethod
+    def validate_track(cls, v: int | None) -> int | None:
+        """Validate track number is positive"""
+        if v is not None and v < 1:
+            raise ValueError('Track number must be positive')
+        return v
+
+    @field_validator('year')
+    @classmethod
+    def validate_year(cls, v: int | None) -> int | None:
+        """Validate year is reasonable"""
+        if v is not None and (v < 1900 or v > 2100):
+            raise ValueError('Year must be between 1900 and 2100')
+        return v
+
+
+class TaggerConfig(BaseModel):
+    """Schema for the complete YAML configuration"""
+    model_config = {'extra': 'forbid'}
+
+    defaults: Defaults | None = None
+    files: list[FileEntry] = Field(..., min_length=1, description="List of audio files")
+
+    @field_validator('files')
+    @classmethod
+    def validate_files_not_empty(cls, v: list[FileEntry]) -> list[FileEntry]:
+        """Ensure files list is not empty"""
+        if not v:
+            raise ValueError('Files list cannot be empty')
+        return v
+
 
 class Tagger:
     """Main class for managing audio file tags and filenames"""
@@ -454,6 +529,18 @@ class Tagger:
             yaml_data['defaults'] = defaults
         yaml_data['files'] = entries
 
+        # Validate YAML structure
+        try:
+            config = TaggerConfig(**yaml_data)
+            # Convert back to dict for YAML serialization
+            yaml_data = config.model_dump(exclude_none=True, mode='python')
+        except ValidationError as e:
+            self.log(f"Error: Generated YAML validation failed:")
+            for error in e.errors():
+                field = " -> ".join(str(x) for x in error['loc'])
+                self.log(f"  {field}: {error['msg']}")
+            sys.exit(1)
+
         # Generate YAML string
         yaml_str = yaml.dump(yaml_data, allow_unicode=True, default_flow_style=False, sort_keys=False)
 
@@ -480,14 +567,25 @@ class Tagger:
         with open(yaml_file, 'r', encoding='utf-8') as f:
             data = yaml.safe_load(f)
 
-        if 'files' not in data:
-            self.log("Error: YAML file must contain 'files' key")
+        # Validate YAML structure
+        try:
+            config = TaggerConfig(**data)
+            self.log("YAML validation successful")
+        except ValidationError as e:
+            self.log(f"Error: YAML validation failed for {yaml_file}:")
+            for error in e.errors():
+                field = " -> ".join(str(x) for x in error['loc'])
+                self.log(f"  {field}: {error['msg']}")
+            self.log("\nCommon issues:")
+            self.log("  - Check for typos in field names (e.g., 'default' should be 'defaults')")
+            self.log("  - Ensure all required fields are present")
+            self.log("  - Verify data types (e.g., year should be a number, not a string)")
             sys.exit(1)
 
         # Get defaults if present
-        defaults = data.get('defaults', {})
+        defaults = config.defaults.model_dump(exclude_none=True, mode='python') if config.defaults else {}
 
-        files_data = data['files']
+        files_data = [f.model_dump(exclude_none=True, mode='python') for f in config.files]
         self.log(f"Processing {len(files_data)} file(s) from {yaml_file}")
 
         for file_data in files_data:
