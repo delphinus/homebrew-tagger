@@ -7,7 +7,7 @@ class Tagger < Formula
   sha256 "ba88c3e70917eb6422ffe700468e4c588b87caf659be2a849ec9f0f67faeaa07"
   license "MIT"
 
-  depends_on "python@3.14"
+  depends_on "python@3.13"
   depends_on "ffmpeg"
 
   # Skip relocation of pydantic_core binary (wheel has insufficient header padding)
@@ -30,15 +30,15 @@ class Tagger < Formula
 
   on_arm do
     resource "pydantic-core" do
-      url "https://files.pythonhosted.org/packages/9e/24/b58a1bc0d834bf1acc4361e61233ee217169a42efbdc15a60296e13ce438/pydantic_core-2.41.4-cp314-cp314-macosx_11_0_arm64.whl"
-      sha256 "82df1f432b37d832709fbcc0e24394bba04a01b6ecf1ee87578145c19cde12ac"
+      url "https://files.pythonhosted.org/packages/00/b6/0ce5c03cec5ae94cca220dfecddc453c077d71363b98a4bbdb3c0b22c783/pydantic_core-2.41.4-cp313-cp313-macosx_11_0_arm64.whl"
+      sha256 "e7393f1d64792763a48924ba31d1e44c2cfbc05e3b1c2c9abb4ceeadd912cced"
     end
   end
 
   on_intel do
     resource "pydantic-core" do
-      url "https://files.pythonhosted.org/packages/54/28/d3325da57d413b9819365546eb9a6e8b7cbd9373d9380efd5f74326143e6/pydantic_core-2.41.4-cp314-cp314-macosx_10_12_x86_64.whl"
-      sha256 "e9205d97ed08a82ebb9a307e92914bb30e18cdf6f6b12ca4bedadb1588a0bfe1"
+      url "https://files.pythonhosted.org/packages/13/d0/c20adabd181a029a970738dfe23710b52a31f1258f591874fcdec7359845/pydantic_core-2.41.4-cp313-cp313-macosx_10_12_x86_64.whl"
+      sha256 "85e050ad9e5f6fe1004eec65c914332e52f429bc0ae12d6fa2092407a462c746"
     end
   end
 
@@ -59,7 +59,7 @@ class Tagger < Formula
 
   def install
     # Create virtualenv and install resources
-    venv = virtualenv_create(libexec, "python3.14")
+    venv = virtualenv_create(libexec, "python3.13")
 
     # Install non-wheel resources (source tarballs)
     venv.pip_install resources.reject { |r| r.name == "pydantic-core" }
