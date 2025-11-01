@@ -17,7 +17,19 @@ from pathlib import Path
 import yaml
 
 try:
-    from mutagen.id3 import APIC, ID3, TALB, TCMP, TCON, TDRC, TIT2, TPE1, TPE2, TRCK, TXXX
+    from mutagen.id3 import (
+        APIC,
+        ID3,
+        TALB,
+        TCMP,
+        TCON,
+        TDRC,
+        TIT2,
+        TPE1,
+        TPE2,
+        TRCK,
+        TXXX,
+    )
     from mutagen.mp3 import MP3
     from mutagen.mp4 import MP4, MP4Cover
 except ImportError:
@@ -367,16 +379,25 @@ class Tagger:
 
                     # Custom tags (freeform)
                     if "----:com.apple.iTunes:LABEL" in audio.tags:
-                        tags["label"] = audio.tags["----:com.apple.iTunes:LABEL"][0].decode("utf-8")
+                        tags["label"] = audio.tags["----:com.apple.iTunes:LABEL"][
+                            0
+                        ].decode("utf-8")
                     if "----:com.apple.iTunes:BANDCAMP_ID" in audio.tags:
-                        tags["bandcamp_id"] = audio.tags["----:com.apple.iTunes:BANDCAMP_ID"][0].decode("utf-8")
+                        tags["bandcamp_id"] = audio.tags[
+                            "----:com.apple.iTunes:BANDCAMP_ID"
+                        ][0].decode("utf-8")
 
         except Exception as e:
             self.log(f"Warning: Could not read tags from {filepath}: {e}")
 
         # If track, artist, title, label, or bandcamp_id is missing, try to parse from filename
-        if (tags["track"] is None or tags["artist"] is None or tags["title"] is None or
-            tags["label"] is None or tags["bandcamp_id"] is None):
+        if (
+            tags["track"] is None
+            or tags["artist"] is None
+            or tags["title"] is None
+            or tags["label"] is None
+            or tags["bandcamp_id"] is None
+        ):
             parsed = self.parse_filename(filepath.name)
 
             if tags["track"] is None and parsed.get("track") is not None:
@@ -432,7 +453,9 @@ class Tagger:
                 if tags.get("label"):
                     audio.tags.add(TXXX(encoding=3, desc="LABEL", text=tags["label"]))
                 if tags.get("bandcamp_id"):
-                    audio.tags.add(TXXX(encoding=3, desc="BANDCAMP_ID", text=tags["bandcamp_id"]))
+                    audio.tags.add(
+                        TXXX(encoding=3, desc="BANDCAMP_ID", text=tags["bandcamp_id"])
+                    )
 
                 # Artwork
                 if tags.get("artwork") and tags["artwork"] != "<embedded>":
@@ -479,9 +502,13 @@ class Tagger:
 
                 # Custom tags
                 if tags.get("label"):
-                    audio.tags["----:com.apple.iTunes:LABEL"] = tags["label"].encode("utf-8")
+                    audio.tags["----:com.apple.iTunes:LABEL"] = tags["label"].encode(
+                        "utf-8"
+                    )
                 if tags.get("bandcamp_id"):
-                    audio.tags["----:com.apple.iTunes:BANDCAMP_ID"] = tags["bandcamp_id"].encode("utf-8")
+                    audio.tags["----:com.apple.iTunes:BANDCAMP_ID"] = tags[
+                        "bandcamp_id"
+                    ].encode("utf-8")
 
                 # Artwork
                 if tags.get("artwork") and tags["artwork"] != "<embedded>":
