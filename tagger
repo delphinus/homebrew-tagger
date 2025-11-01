@@ -17,7 +17,7 @@ from pathlib import Path
 import yaml
 
 try:
-    from mutagen.id3 import APIC, ID3, TALB, TCMP, TCON, TDRC, TIT2, TPE1, TPE2, TRCK
+    from mutagen.id3 import APIC, ID3, TALB, TCMP, TCON, TDRC, TIT2, TPE1, TPE2, TRCK, TXXX
     from mutagen.mp3 import MP3
     from mutagen.mp4 import MP4, MP4Cover
 except ImportError:
@@ -49,6 +49,8 @@ class Defaults(BaseModel):
     year: int | None = None
     artwork: str | None = None
     compilation: bool | None = None
+    label: str | None = None
+    bandcamp_id: str | None = None
 
     @field_validator("year")
     @classmethod
@@ -74,6 +76,8 @@ class FileEntry(BaseModel):
     year: int | None = None
     artwork: str | None = None
     compilation: bool | None = None
+    label: str | None = None
+    bandcamp_id: str | None = None
 
     @field_validator("track")
     @classmethod
@@ -191,6 +195,7 @@ class Tagger:
         """Parse metadata from filename
 
         Supported patterns (spaces are flexible, 1+ spaces allowed):
+        - Label - Artist - Title [ID].mp3 -> label="Label", artist="Artist", title="Title", bandcamp_id="ID"
         - 01 Artist - Title.mp3 -> track=1, artist="Artist", title="Title"
         - 01  - Title.mp3 -> track=1, artist="", title="Title"
         - 01 Title.mp3 -> track=1, artist="", title="Title"
@@ -203,8 +208,25 @@ class Tagger:
         track = None
         artist = None
         title = None
+        label = None
+        bandcamp_id = None
 
         # Try patterns in order of specificity (spaces: 1+ allowed)
+        # Pattern 0: "Label - Artist - Title [ID]" (Bandcamp format)
+        match = re.match(r"^(.+?)\s+-\s+(.+?)\s+-\s+(.+?)\s+\[(\d+)\]$", name)
+        if match:
+            label = match.group(1).strip()
+            artist = match.group(2).strip()
+            title = match.group(3).strip()
+            bandcamp_id = match.group(4).strip()
+            return {
+                "track": None,
+                "artist": artist if artist else None,
+                "title": title if title else None,
+                "label": label if label else None,
+                "bandcamp_id": bandcamp_id if bandcamp_id else None,
+            }
+
         # Pattern 1: "01 Artist - Title" (track + artist + title)
         match = re.match(r"^(\d+)\s+(.+?)\s+-\s+(.+)$", name)
         if match:
@@ -275,6 +297,8 @@ class Tagger:
             "year": None,
             "artwork": None,
             "compilation": None,
+            "label": None,
+            "bandcamp_id": None,
         }
 
         try:
@@ -310,6 +334,12 @@ class Tagger:
                     if "APIC:" in audio.tags:
                         tags["artwork"] = "<embedded>"
 
+                    # Custom tags (TXXX frames)
+                    if "TXXX:LABEL" in audio.tags:
+                        tags["label"] = str(audio.tags["TXXX:LABEL"])
+                    if "TXXX:BANDCAMP_ID" in audio.tags:
+                        tags["bandcamp_id"] = str(audio.tags["TXXX:BANDCAMP_ID"])
+
             elif ext == ".m4a":
                 audio = MP4(str(filepath))
                 if audio.tags:
@@ -335,19 +365,30 @@ class Tagger:
                     if "covr" in audio.tags:
                         tags["artwork"] = "<embedded>"
 
+                    # Custom tags (freeform)
+                    if "----:com.apple.iTunes:LABEL" in audio.tags:
+                        tags["label"] = audio.tags["----:com.apple.iTunes:LABEL"][0].decode("utf-8")
+                    if "----:com.apple.iTunes:BANDCAMP_ID" in audio.tags:
+                        tags["bandcamp_id"] = audio.tags["----:com.apple.iTunes:BANDCAMP_ID"][0].decode("utf-8")
+
         except Exception as e:
             self.log(f"Warning: Could not read tags from {filepath}: {e}")
 
-        # If track, artist, or title is missing, try to parse from filename
-        if tags["track"] is None or tags["artist"] is None or tags["title"] is None:
+        # If track, artist, title, label, or bandcamp_id is missing, try to parse from filename
+        if (tags["track"] is None or tags["artist"] is None or tags["title"] is None or
+            tags["label"] is None or tags["bandcamp_id"] is None):
             parsed = self.parse_filename(filepath.name)
 
-            if tags["track"] is None and parsed["track"] is not None:
+            if tags["track"] is None and parsed.get("track") is not None:
                 tags["track"] = parsed["track"]
-            if tags["artist"] is None and parsed["artist"] is not None:
+            if tags["artist"] is None and parsed.get("artist") is not None:
                 tags["artist"] = parsed["artist"]
-            if tags["title"] is None and parsed["title"] is not None:
+            if tags["title"] is None and parsed.get("title") is not None:
                 tags["title"] = parsed["title"]
+            if tags["label"] is None and parsed.get("label") is not None:
+                tags["label"] = parsed["label"]
+            if tags["bandcamp_id"] is None and parsed.get("bandcamp_id") is not None:
+                tags["bandcamp_id"] = parsed["bandcamp_id"]
 
         return tags
 
@@ -386,6 +427,12 @@ class Tagger:
                     audio.tags.add(
                         TCMP(encoding=3, text="1" if tags["compilation"] else "0")
                     )
+
+                # Custom tags
+                if tags.get("label"):
+                    audio.tags.add(TXXX(encoding=3, desc="LABEL", text=tags["label"]))
+                if tags.get("bandcamp_id"):
+                    audio.tags.add(TXXX(encoding=3, desc="BANDCAMP_ID", text=tags["bandcamp_id"]))
 
                 # Artwork
                 if tags.get("artwork") and tags["artwork"] != "<embedded>":
@@ -429,6 +476,12 @@ class Tagger:
                     audio.tags["trkn"] = [(tags["track"], 0)]
                 if tags.get("compilation") is not None:
                     audio.tags["cpil"] = [tags["compilation"]]
+
+                # Custom tags
+                if tags.get("label"):
+                    audio.tags["----:com.apple.iTunes:LABEL"] = tags["label"].encode("utf-8")
+                if tags.get("bandcamp_id"):
+                    audio.tags["----:com.apple.iTunes:BANDCAMP_ID"] = tags["bandcamp_id"].encode("utf-8")
 
                 # Artwork
                 if tags.get("artwork") and tags["artwork"] != "<embedded>":
@@ -540,6 +593,8 @@ class Tagger:
             "year",
             "artwork",
             "compilation",
+            "label",
+            "bandcamp_id",
         ]
         defaults = {}
 
