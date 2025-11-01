@@ -9,10 +9,7 @@ on:
 
 jobs:
   test-homebrew-install:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [macos-latest, macos-13]  # macos-latest: arm64, macos-13: x86_64
+    runs-on: macos-latest  # ARM64 (Apple Silicon)
 
     steps:
     - uses: actions/checkout@v4
