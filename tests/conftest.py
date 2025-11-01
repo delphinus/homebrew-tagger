@@ -1,8 +1,6 @@
 """Pytest configuration and fixtures"""
 
 import sys
-from importlib.machinery import SourceFileLoader
-from importlib.util import module_from_spec, spec_from_loader
 from pathlib import Path
 
 # Get the project root directory
@@ -11,13 +9,11 @@ project_root = Path(__file__).parent.parent
 # Add project root to sys.path
 sys.path.insert(0, str(project_root))
 
-# Import tagger module using SourceFileLoader (works with files without .py extension)
-tagger_path = project_root / "tagger"
-loader = SourceFileLoader("tagger_module", str(tagger_path))
-spec = spec_from_loader(loader.name, loader)
-tagger_module = module_from_spec(spec)
+# Import tagger module from the package
+from tagger import cli as tagger_module
+
+# Make tagger module available in sys.modules for backward compatibility
 sys.modules["tagger_module"] = tagger_module
-spec.loader.exec_module(tagger_module)
 
 # Make tagger module available to all tests
 pytest_plugins = []

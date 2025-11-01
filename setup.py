@@ -16,8 +16,12 @@ setup(
     long_description_content_type="text/markdown",
     author="delphinus",
     url="https://github.com/delphinus/tagger",
-    py_modules=[],
-    scripts=["tagger"],
+    packages=["tagger"],
+    entry_points={
+        "console_scripts": [
+            "tagger=tagger.cli:main",
+        ],
+    },
     install_requires=[
         "mutagen>=1.45.0",
         "PyYAML>=6.0",
