@@ -10,6 +10,9 @@ class Tagger < Formula
   depends_on "python@3.14"
   depends_on "ffmpeg"
 
+  # Skip relocation of pydantic_core binary (wheel has insufficient header padding)
+  skip_clean "libexec"
+
   resource "typing-extensions" do
     url "https://files.pythonhosted.org/packages/72/94/1a15dd82efb362ac84269196e94cf00f187f7ed21c242792a923cdb1c61f/typing_extensions-4.15.0.tar.gz"
     sha256 "0cea48d173cc12fa28ecabc3b837ea3cf6f38c6d1136f85cbaaf598984861466"
