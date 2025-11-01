@@ -139,3 +139,63 @@ class TestTaggerConfigValidation:
         config = TaggerConfig(files=[FileEntry(filename="test.mp3", title="Test")])
         assert config.defaults is None
         assert len(config.files) == 1
+
+
+class TestBandcampSupport:
+    """Test Bandcamp format support"""
+
+    def test_parse_bandcamp_filename(self):
+        """Test parsing Bandcamp format filename"""
+        tagger = Tagger()
+        result = tagger.parse_filename(
+            "N3XT Future Records - Hairo - Beyond the journey [1659085877].mp3"
+        )
+
+        assert result["label"] == "N3XT Future Records"
+        assert result["artist"] == "Hairo"
+        assert result["title"] == "Beyond the journey"
+        assert result["bandcamp_id"] == "1659085877"
+        assert result["track"] is None
+
+    def test_bandcamp_fields_in_defaults(self):
+        """Test that label and bandcamp_id can be in defaults"""
+        defaults = Defaults(
+            label="Test Label",
+            bandcamp_id="123456789",
+            album="Test Album",
+        )
+        assert defaults.label == "Test Label"
+        assert defaults.bandcamp_id == "123456789"
+
+    def test_bandcamp_fields_in_file_entry(self):
+        """Test that label and bandcamp_id can be in file entry"""
+        entry = FileEntry(
+            filename="Label - Artist - Title [123].mp3",
+            artist="Artist",
+            title="Title",
+            label="Label",
+            bandcamp_id="123",
+        )
+        assert entry.label == "Label"
+        assert entry.bandcamp_id == "123"
+
+    def test_bandcamp_config_validation(self):
+        """Test complete config with Bandcamp fields"""
+        config = TaggerConfig(
+            defaults=Defaults(label="N3XT Future Records", album="Test Album"),
+            files=[
+                FileEntry(
+                    filename="track1.mp3",
+                    title="Track 1",
+                    bandcamp_id="111",
+                ),
+                FileEntry(
+                    filename="track2.mp3",
+                    title="Track 2",
+                    bandcamp_id="222",
+                ),
+            ],
+        )
+        assert config.defaults.label == "N3XT Future Records"
+        assert config.files[0].bandcamp_id == "111"
+        assert config.files[1].bandcamp_id == "222"
