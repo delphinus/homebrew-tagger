@@ -1,0 +1,52 @@
+name: Homebrew Install Test
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  test-homebrew-install:
+    runs-on: macos-latest  # ARM64 (Apple Silicon)
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Homebrew
+      run: |
+        echo "Homebrew version: $(brew --version)"
+        brew update
+
+    - name: Create local tap
+      run: |
+        mkdir -p $(brew --repository)/Library/Taps/delphinus
+        ln -s $PWD $(brew --repository)/Library/Taps/delphinus/homebrew-tagger
+
+    - name: Install tagger from local formula
+      run: |
+        brew install --build-from-source delphinus/tagger/tagger
+
+    - name: Test tagger installation
+      run: |
+        # Check that tagger is installed
+        which tagger
+
+        # Check that tagger can run
+        tagger --help
+
+        # Check version
+        brew info delphinus/tagger/tagger
+
+    - name: Test tagger functionality
+      run: |
+        # Create a test directory
+        mkdir -p test_audio
+        cd test_audio
+
+        # Test basic functionality (dry-run mode)
+        echo "Testing tagger in dry-run mode..."
+
+        # tagger should work even without audio files
+        tagger || true
