@@ -32,7 +32,8 @@ jobs:
           echo "Building on the latest tag"
         else
           echo "Building on $GITHUB_REF"
-          HASH=$(git describe --tags HEAD | tr -d '\n')
+          # Use --always to fallback to commit hash if no tags exist
+          HASH=$(git describe --always --tags HEAD | tr -d '\n')
           export HASH
           export URL=https://github.com/delphinus/homebrew-tagger/tarball/$HASH
           SHA=$(curl -L "$URL" | shasum -a256 | cut -wf1)
