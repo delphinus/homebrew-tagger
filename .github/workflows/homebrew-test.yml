@@ -38,8 +38,14 @@ jobs:
           export URL=https://github.com/delphinus/homebrew-tagger/tarball/$HASH
           SHA=$(curl -L "$URL" | shasum -a256 | cut -wf1)
           export SHA
-          perl -i -pe 's,(?<=^  url ").*(?="$),$ENV{URL},' $FORMULA
-          perl -i -pe 's,(?<=^  sha256 ").*(?="$),$ENV{SHA},' $FORMULA
+          perl -i -pe "s,(?<=^  url \").*(?=\"\$),\$ENV{URL}," $FORMULA
+          perl -i -pe "s,(?<=^  sha256 \").*(?=\"\$),\$ENV{SHA}," $FORMULA
+          # Add version field after license line if not present, or update if present
+          if grep -q '^  version ' $FORMULA; then
+            perl -i -pe "s,(?<=^  version \").*(?=\"\$),\$ENV{HASH}," $FORMULA
+          else
+            perl -i -pe "s,^(  license .*)\$,\$1\n  version \"\$ENV{HASH}\"," $FORMULA
+          fi
         fi
 
         TAP=local/tagger
