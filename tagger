@@ -9,6 +9,7 @@ It can also convert .aac files to .m4a format (lossless container conversion).
 __version__ = "1.4.6"
 
 import argparse
+import hashlib
 import os
 import re
 import shutil
@@ -140,6 +141,61 @@ class Tagger:
         """Print log message"""
         prefix = "[DRY-RUN] " if self.dry_run else ""
         print(f"{prefix}{message}")
+
+    def get_artwork_hash(self, data: bytes) -> str:
+        """Calculate SHA256 hash of artwork data"""
+        return hashlib.sha256(data).hexdigest()
+
+    def get_embedded_artwork(self, filepath: Path) -> bytes | None:
+        """Extract embedded artwork from audio file"""
+        ext = filepath.suffix.lower()
+
+        try:
+            if ext == ".mp3":
+                audio = MP3(str(filepath), ID3=ID3)
+                if audio.tags and "APIC:" in audio.tags:
+                    return audio.tags["APIC:"].data
+            elif ext == ".m4a":
+                audio = MP4(str(filepath))
+                if audio.tags and "covr" in audio.tags:
+                    return bytes(audio.tags["covr"][0])
+        except Exception:
+            pass
+
+        return None
+
+    def compare_artwork(self, filepath: Path, artwork_path: str | None) -> bool:
+        """Compare embedded artwork with external file
+
+        Returns True if they are the same, False otherwise
+        """
+        if not artwork_path or artwork_path == "<embedded>":
+            # Can't compare if no external file specified
+            return False
+
+        # Get embedded artwork
+        embedded_data = self.get_embedded_artwork(filepath)
+        if not embedded_data:
+            # No embedded artwork
+            return False
+
+        # Get external artwork file
+        external_path = Path(artwork_path)
+        if not external_path.exists():
+            # External file doesn't exist
+            return False
+
+        try:
+            with open(external_path, "rb") as f:
+                external_data = f.read()
+        except Exception:
+            return False
+
+        # Compare hashes
+        embedded_hash = self.get_artwork_hash(embedded_data)
+        external_hash = self.get_artwork_hash(external_data)
+
+        return embedded_hash == external_hash
 
     def find_audio_files(self, directory: str = ".") -> list[Path]:
         """Find all supported audio files in the directory"""
@@ -593,14 +649,35 @@ class Tagger:
             self.log(f"Error: Could not rename {old_path}: {e}")
             return None
 
-    def compare_tags(self, current: dict, yaml_data: dict) -> dict:
-        """Compare current tags with YAML data and return differences"""
+    def compare_tags(
+        self, current: dict, yaml_data: dict, filepath: Path | None = None
+    ) -> dict:
+        """Compare current tags with YAML data and return differences
+
+        For artwork, compares actual file contents if filepath is provided
+        """
         diff = {}
         all_keys = set(current.keys()) | set(yaml_data.keys())
 
         for key in all_keys:
             current_val = current.get(key)
             yaml_val = yaml_data.get(key)
+
+            # Special handling for artwork comparison
+            if key == "artwork" and filepath:
+                # If current has embedded artwork and YAML specifies a file
+                if (
+                    current_val == "<embedded>"
+                    and yaml_val
+                    and yaml_val != "<embedded>"
+                ):
+                    # Compare actual file contents
+                    if self.compare_artwork(filepath, yaml_val):
+                        # Artwork is the same, skip diff
+                        continue
+                # If both are "<embedded>", they're the same
+                elif current_val == "<embedded>" and yaml_val == "<embedded>":
+                    continue
 
             if current_val != yaml_val:
                 diff[key] = {"current": current_val, "yaml": yaml_val}
@@ -694,8 +771,8 @@ class Tagger:
             # Merge defaults with file-specific data
             yaml_tags = defaults | yaml_file_data
 
-            # Compare tags
-            diff = self.compare_tags(current_tags, yaml_tags)
+            # Compare tags (pass filepath for artwork comparison)
+            diff = self.compare_tags(current_tags, yaml_tags, filepath)
 
             if diff:
                 modified_files.append((filename, diff))
