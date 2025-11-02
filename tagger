@@ -133,9 +133,31 @@ class Tagger:
 
     SUPPORTED_EXTENSIONS = {".mp3", ".m4a"}
 
-    def __init__(self, execute: bool = False):
+    # ANSI color codes
+    COLORS = {
+        "reset": "\033[0m",
+        "red": "\033[91m",
+        "green": "\033[92m",
+        "yellow": "\033[93m",
+        "blue": "\033[94m",
+        "magenta": "\033[95m",
+        "cyan": "\033[96m",
+        "white": "\033[97m",
+        "bold": "\033[1m",
+        "dim": "\033[2m",
+    }
+
+    def __init__(self, execute: bool = False, no_color: bool = False):
         self.execute = execute
         self.dry_run = not execute
+        self.no_color = no_color or not sys.stdout.isatty()
+
+    def color(self, text: str, *colors: str) -> str:
+        """Apply color to text"""
+        if self.no_color:
+            return text
+        color_codes = "".join(self.COLORS.get(c, "") for c in colors)
+        return f"{color_codes}{text}{self.COLORS['reset']}"
 
     def log(self, message: str):
         """Print log message"""
@@ -735,25 +757,31 @@ class Tagger:
         # Show deleted files
         if deleted_files:
             has_changes = True
-            print("\n" + "=" * 60)
-            print("DELETED FILES (in YAML but not in directory):")
-            print("=" * 60)
+            print("\n" + self.color("=" * 60, "dim"))
+            print(
+                self.color(
+                    "DELETED FILES (in YAML but not in directory):", "red", "bold"
+                )
+            )
+            print(self.color("=" * 60, "dim"))
             for filename in sorted(deleted_files):
-                print(f"  - {filename}")
+                print(f"  {self.color('-', 'red')} {self.color(filename, 'red')}")
 
         # Show new files
         if new_files:
             has_changes = True
-            print("\n" + "=" * 60)
-            print("NEW FILES (in directory but not in YAML):")
-            print("=" * 60)
+            print("\n" + self.color("=" * 60, "dim"))
+            print(
+                self.color("NEW FILES (in directory but not in YAML):", "green", "bold")
+            )
+            print(self.color("=" * 60, "dim"))
             for filename in sorted(new_files):
                 filepath = current_files[filename]
                 current_tags = self.read_tags(filepath)
-                print(f"\n  {filename}:")
+                print(f"\n  {self.color(filename, 'green', 'bold')}:")
                 for key, value in current_tags.items():
                     if key != "filename" and value is not None:
-                        print(f"    {key}: {value}")
+                        print(f"    {self.color(key, 'cyan')}: {value}")
 
         # Show modified files
         modified_files = []
@@ -779,25 +807,37 @@ class Tagger:
 
         if modified_files:
             has_changes = True
-            print("\n" + "=" * 60)
-            print("MODIFIED FILES (differences between current and YAML):")
-            print("=" * 60)
+            print("\n" + self.color("=" * 60, "dim"))
+            print(
+                self.color(
+                    "MODIFIED FILES (differences between current and YAML):",
+                    "yellow",
+                    "bold",
+                )
+            )
+            print(self.color("=" * 60, "dim"))
             for filename, diff in modified_files:
-                print(f"\n  {filename}:")
+                print(f"\n  {self.color(filename, 'yellow', 'bold')}:")
                 for key, values in diff.items():
                     if key == "filename":
                         continue
                     current_val = values["current"]
                     yaml_val = values["yaml"]
-                    print(f"    {key}:")
-                    print(f"      current: {current_val}")
-                    print(f"      yaml:    {yaml_val}")
+                    print(f"    {self.color(key, 'cyan')}:")
+                    print(
+                        f"      {self.color('current:', 'green')} {self.color(str(current_val), 'green')}"
+                    )
+                    print(
+                        f"      {self.color('yaml:   ', 'red')} {self.color(str(yaml_val), 'red')}"
+                    )
 
         if not has_changes:
-            print("\n" + "=" * 60)
-            print("NO CHANGES DETECTED")
-            print("=" * 60)
-            print(f"\nCurrent directory state matches {yaml_file}")
+            print("\n" + self.color("=" * 60, "dim"))
+            print(self.color("NO CHANGES DETECTED", "green", "bold"))
+            print(self.color("=" * 60, "dim"))
+            print(
+                f"\n{self.color('✓', 'green')} Current directory state matches {self.color(yaml_file, 'cyan')}"
+            )
 
     def generate_yaml(self, output_file: str = "tagger.yaml"):
         """Generate YAML file from current directory audio files"""
@@ -1022,9 +1062,15 @@ Note:
         version=f"%(prog)s {__version__}",
     )
 
+    parser.add_argument(
+        "--no-color",
+        action="store_true",
+        help="Disable colored output",
+    )
+
     args = parser.parse_args()
 
-    tagger = Tagger(execute=args.execute)
+    tagger = Tagger(execute=args.execute, no_color=args.no_color)
 
     if args.yaml_file:
         # Apply mode
