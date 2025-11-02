@@ -9,6 +9,7 @@ It can also convert .aac files to .m4a format (lossless container conversion).
 __version__ = "1.4.5"
 
 import argparse
+import hashlib
 import os
 import re
 import shutil
@@ -140,6 +141,61 @@ class Tagger:
         """Print log message"""
         prefix = "[DRY-RUN] " if self.dry_run else ""
         print(f"{prefix}{message}")
+
+    def get_artwork_hash(self, data: bytes) -> str:
+        """Calculate SHA256 hash of artwork data"""
+        return hashlib.sha256(data).hexdigest()
+
+    def get_embedded_artwork(self, filepath: Path) -> bytes | None:
+        """Extract embedded artwork from audio file"""
+        ext = filepath.suffix.lower()
+
+        try:
+            if ext == ".mp3":
+                audio = MP3(str(filepath), ID3=ID3)
+                if audio.tags and "APIC:" in audio.tags:
+                    return audio.tags["APIC:"].data
+            elif ext == ".m4a":
+                audio = MP4(str(filepath))
+                if audio.tags and "covr" in audio.tags:
+                    return bytes(audio.tags["covr"][0])
+        except Exception:
+            pass
+
+        return None
+
+    def compare_artwork(self, filepath: Path, artwork_path: str | None) -> bool:
+        """Compare embedded artwork with external file
+
+        Returns True if they are the same, False otherwise
+        """
+        if not artwork_path or artwork_path == "<embedded>":
+            # Can't compare if no external file specified
+            return False
+
+        # Get embedded artwork
+        embedded_data = self.get_embedded_artwork(filepath)
+        if not embedded_data:
+            # No embedded artwork
+            return False
+
+        # Get external artwork file
+        external_path = Path(artwork_path)
+        if not external_path.exists():
+            # External file doesn't exist
+            return False
+
+        try:
+            with open(external_path, "rb") as f:
+                external_data = f.read()
+        except Exception:
+            return False
+
+        # Compare hashes
+        embedded_hash = self.get_artwork_hash(embedded_data)
+        external_hash = self.get_artwork_hash(external_data)
+
+        return embedded_hash == external_hash
 
     def find_audio_files(self, directory: str = ".") -> list[Path]:
         """Find all supported audio files in the directory"""
