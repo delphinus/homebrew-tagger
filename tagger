@@ -666,7 +666,11 @@ class Tagger:
             # Special handling for artwork comparison
             if key == "artwork" and filepath:
                 # If current has embedded artwork and YAML specifies a file
-                if current_val == "<embedded>" and yaml_val and yaml_val != "<embedded>":
+                if (
+                    current_val == "<embedded>"
+                    and yaml_val
+                    and yaml_val != "<embedded>"
+                ):
                     # Compare actual file contents
                     if self.compare_artwork(filepath, yaml_val):
                         # Artwork is the same, skip diff
