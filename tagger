@@ -593,6 +593,135 @@ class Tagger:
             self.log(f"Error: Could not rename {old_path}: {e}")
             return None
 
+    def compare_tags(self, current: dict, yaml_data: dict) -> dict:
+        """Compare current tags with YAML data and return differences"""
+        diff = {}
+        all_keys = set(current.keys()) | set(yaml_data.keys())
+
+        for key in all_keys:
+            current_val = current.get(key)
+            yaml_val = yaml_data.get(key)
+
+            if current_val != yaml_val:
+                diff[key] = {"current": current_val, "yaml": yaml_val}
+
+        return diff
+
+    def show_diff(self, yaml_file: str = "tagger.yaml"):
+        """Show differences between current state and YAML file"""
+        if not os.path.exists(yaml_file):
+            self.log(f"Error: {yaml_file} not found")
+            return
+
+        # First, convert any .aac files to .m4a
+        self.find_and_convert_aac_files()
+
+        # Load YAML file
+        with open(yaml_file, "r", encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+
+        # Validate YAML structure
+        try:
+            config = TaggerConfig(**data)
+        except ValidationError as e:
+            self.log(f"Error: YAML validation failed for {yaml_file}:")
+            for error in e.errors():
+                field = " -> ".join(str(x) for x in error["loc"])
+                self.log(f"  {field}: {error['msg']}")
+            return
+
+        # Get defaults from YAML
+        defaults = (
+            config.defaults.model_dump(exclude_none=True, mode="python")
+            if config.defaults
+            else {}
+        )
+
+        # Get current files
+        files = self.find_audio_files()
+        current_files = {f.name: f for f in files}
+
+        # Get YAML files
+        yaml_files = {f.filename: f for f in config.files}
+
+        # Find files only in YAML (deleted files)
+        deleted_files = set(yaml_files.keys()) - set(current_files.keys())
+
+        # Find files only in current directory (new files)
+        new_files = set(current_files.keys()) - set(yaml_files.keys())
+
+        # Find common files (potentially modified)
+        common_files = set(current_files.keys()) & set(yaml_files.keys())
+
+        has_changes = False
+
+        # Show deleted files
+        if deleted_files:
+            has_changes = True
+            print("\n" + "=" * 60)
+            print("DELETED FILES (in YAML but not in directory):")
+            print("=" * 60)
+            for filename in sorted(deleted_files):
+                print(f"  - {filename}")
+
+        # Show new files
+        if new_files:
+            has_changes = True
+            print("\n" + "=" * 60)
+            print("NEW FILES (in directory but not in YAML):")
+            print("=" * 60)
+            for filename in sorted(new_files):
+                filepath = current_files[filename]
+                current_tags = self.read_tags(filepath)
+                print(f"\n  {filename}:")
+                for key, value in current_tags.items():
+                    if key != "filename" and value is not None:
+                        print(f"    {key}: {value}")
+
+        # Show modified files
+        modified_files = []
+        for filename in sorted(common_files):
+            filepath = current_files[filename]
+            current_tags = self.read_tags(filepath)
+
+            # Get YAML data for this file
+            yaml_file_data = next(
+                f.model_dump(exclude_none=True, mode="python")
+                for f in config.files
+                if f.filename == filename
+            )
+
+            # Merge defaults with file-specific data
+            yaml_tags = defaults | yaml_file_data
+
+            # Compare tags
+            diff = self.compare_tags(current_tags, yaml_tags)
+
+            if diff:
+                modified_files.append((filename, diff))
+
+        if modified_files:
+            has_changes = True
+            print("\n" + "=" * 60)
+            print("MODIFIED FILES (differences between current and YAML):")
+            print("=" * 60)
+            for filename, diff in modified_files:
+                print(f"\n  {filename}:")
+                for key, values in diff.items():
+                    if key == "filename":
+                        continue
+                    current_val = values["current"]
+                    yaml_val = values["yaml"]
+                    print(f"    {key}:")
+                    print(f"      current: {current_val}")
+                    print(f"      yaml:    {yaml_val}")
+
+        if not has_changes:
+            print("\n" + "=" * 60)
+            print("NO CHANGES DETECTED")
+            print("=" * 60)
+            print(f"\nCurrent directory state matches {yaml_file}")
+
     def generate_yaml(self, output_file: str = "tagger.yaml"):
         """Generate YAML file from current directory audio files"""
         # First, convert any .aac files to .m4a
@@ -770,10 +899,10 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Generate YAML from current directory (dry-run)
+  # Show diff if tagger.yaml exists, otherwise generate YAML (dry-run)
   tagger
 
-  # Generate YAML and save it
+  # Generate YAML and save it (even if tagger.yaml exists)
   tagger --execute
 
   # Apply tags from YAML (dry-run)
@@ -781,6 +910,11 @@ Examples:
 
   # Apply tags from YAML and execute
   tagger --execute tagger.yaml
+
+Note:
+  When running 'tagger' without arguments, if tagger.yaml exists in the current
+  directory, it will show differences between the current state and the YAML file.
+  This helps you see what has changed before updating the YAML or applying tags.
         """,
     )
 
@@ -819,8 +953,12 @@ Examples:
         # Apply mode
         tagger.apply_yaml(args.yaml_file)
     else:
-        # Generate mode
-        tagger.generate_yaml(args.output)
+        # Generate/Diff mode
+        # If tagger.yaml exists in current directory, show diff instead of generating
+        if os.path.exists("tagger.yaml") and not args.execute:
+            tagger.show_diff("tagger.yaml")
+        else:
+            tagger.generate_yaml(args.output)
 
 
 if __name__ == "__main__":
