@@ -21,7 +21,7 @@ class Tagger < Formula
   end
 
   resource "pydantic-core" do
-    url "https://files.pythonhosted.org/packages/fc/01/f3e5ac0589ff8e55be7478e6cad92fb144477e20f07029a3aecbfd4818f8/pydantic_core-2.27.1.tar.gz"
+    url "https://files.pythonhosted.org/packages/a6/9f/7de1f19b6aea45aeb441838782d68352e71bfa98ee6fa048d5041991b33e/pydantic_core-2.27.1.tar.gz"
     sha256 "62a763352879b84aa31058fc931884055fd75089cccbd9d58bb6afd01141b235"
   end
 
