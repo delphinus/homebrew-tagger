@@ -77,9 +77,17 @@ jobs:
 
     - name: Update Homebrew Formula
       run: |
-        # Update only the URL and SHA256, keep everything else from current tagger.rb
+        # Update only the URL and the first SHA256 (Formula tarball), keep all resource SHA256s intact
         sed -i "s|url \"https://github.com/${{ github.repository }}/archive/refs/tags/v.*\.tar\.gz\"|url \"https://github.com/${{ github.repository }}/archive/refs/tags/v${{ inputs.version }}.tar.gz\"|" tagger.rb
-        sed -i "s|sha256 \".*\"|sha256 \"${{ env.SHA256 }}\"|" tagger.rb
+        # Use awk to replace only the first sha256 occurrence
+        awk -v new_sha="${{ env.SHA256 }}" '
+          !done && /^  sha256 "/ {
+            print "  sha256 \"" new_sha "\""
+            done=1
+            next
+          }
+          { print }
+        ' tagger.rb > tagger.rb.tmp && mv tagger.rb.tmp tagger.rb
 
         git diff tagger.rb
 
