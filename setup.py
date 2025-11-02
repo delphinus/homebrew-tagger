@@ -10,7 +10,7 @@ with open("README.md", "r", encoding="utf-8") as f:
 
 setup(
     name="tagger",
-    version="1.4.2",
+    version="1.4.3",
     description="Audio file tag and filename manager using mutagen",
     long_description=long_description,
     long_description_content_type="text/markdown",
