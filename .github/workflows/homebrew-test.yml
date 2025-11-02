@@ -10,23 +10,51 @@ on:
 jobs:
   test-homebrew-install:
     runs-on: macos-latest  # ARM64 (Apple Silicon)
+    timeout-minutes: 15
 
     steps:
     - uses: actions/checkout@v4
 
-    - name: Set up Homebrew
+    - name: Set up Homebrew and install from local formula
       run: |
-        echo "Homebrew version: $(brew --version)"
+        set -eux
+
+        # Disable features to speed up installation
+        export HOMEBREW_NO_INSTALL_CLEANUP=1
+        export HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1
+        export HOMEBREW_NO_INSTALL_FROM_API=1
+
+        sw_vers # show macOS version
+
+        FORMULA=tagger.rb
+
+        if [[ $GITHUB_REF = refs/heads/main ]]; then
+          echo "Building on the latest tag"
+        else
+          echo "Building on $GITHUB_REF"
+          HASH=$(git describe --tags HEAD | tr -d '\n')
+          export HASH
+          export URL=https://github.com/delphinus/homebrew-tagger/tarball/$HASH
+          SHA=$(curl -L "$URL" | shasum -a256 | cut -wf1)
+          export SHA
+          perl -i -pe 's,(?<=^  url ").*(?="$),$ENV{URL},' $FORMULA
+          perl -i -pe 's,(?<=^  sha256 ").*(?="$),$ENV{SHA},' $FORMULA
+        fi
+
+        TAP=local/tagger
+
+        # Configure git for brew tap-new
+        git config --global user.name "github-actions[bot]"
+        git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
         brew update
 
-    - name: Create local tap
-      run: |
-        mkdir -p $(brew --repository)/Library/Taps/delphinus
-        ln -s $PWD $(brew --repository)/Library/Taps/delphinus/homebrew-tagger
+        # Create local tap and copy formula
+        brew tap-new $TAP
+        cp $FORMULA "$(brew --repo $TAP)/Formula/"
 
-    - name: Install tagger from local formula
-      run: |
-        brew install --build-from-source delphinus/tagger/tagger
+        # Install from local tap
+        brew install -v $TAP/tagger
 
     - name: Test tagger installation
       run: |
@@ -37,7 +65,7 @@ jobs:
         tagger --help
 
         # Check version
-        brew info delphinus/tagger/tagger
+        brew info local/tagger/tagger
 
     - name: Test tagger functionality
       run: |
