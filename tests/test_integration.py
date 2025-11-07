@@ -201,3 +201,114 @@ class TestTagApplication:
             assert "year" not in file_entry
             assert "artist" in file_entry
             assert "title" in file_entry
+
+    def test_yaml_updates_on_filename_change(self):
+        """Test that YAML file is updated when filename changes"""
+        # Copy dummy MP3 to test directory
+        src_mp3 = self.fixtures_dir / "dummy.mp3"
+        test_mp3 = Path(self.test_dir) / "test.mp3"
+        shutil.copy(src_mp3, test_mp3)
+
+        # Create YAML config
+        yaml_config = {
+            "defaults": {
+                "album": "Test Album",
+                "year": 2024,
+            },
+            "files": [
+                {
+                    "filename": "test.mp3",
+                    "track": 1,
+                    "artist": "Test Artist",
+                    "title": "Test Title",
+                }
+            ],
+        }
+
+        yaml_file = Path(self.test_dir) / "test.yaml"
+        with open(yaml_file, "w") as f:
+            yaml.dump(yaml_config, f)
+
+        # Apply tags (this should rename the file)
+        os.chdir(self.test_dir)
+        tagger = Tagger(execute=True)
+        tagger.apply_yaml("test.yaml")
+
+        # Load YAML and verify filename was updated
+        with open(yaml_file, "r") as f:
+            updated_data = yaml.safe_load(f)
+
+        expected_filename = "01 Test Artist - Test Title.mp3"
+        assert updated_data["files"][0]["filename"] == expected_filename
+        assert Path(expected_filename).exists()
+
+        # Apply YAML again - it should succeed without errors
+        # This tests the bug where the second run would fail because
+        # the YAML still had the old filename
+        tagger.apply_yaml("test.yaml")
+
+        # Verify the file still exists with correct tags
+        tags = tagger.read_tags(Path(expected_filename))
+        assert tags["track"] == 1
+        assert tags["artist"] == "Test Artist"
+        assert tags["title"] == "Test Title"
+
+    def test_yaml_updates_with_multiple_files(self):
+        """Test that YAML file is updated correctly when multiple files are renamed"""
+        # Copy dummy MP3s to test directory
+        src_mp3 = self.fixtures_dir / "dummy.mp3"
+        test_mp3_1 = Path(self.test_dir) / "file1.mp3"
+        test_mp3_2 = Path(self.test_dir) / "file2.mp3"
+        shutil.copy(src_mp3, test_mp3_1)
+        shutil.copy(src_mp3, test_mp3_2)
+
+        # Create YAML config
+        yaml_config = {
+            "defaults": {
+                "album": "Multi Test Album",
+            },
+            "files": [
+                {
+                    "filename": "file1.mp3",
+                    "track": 1,
+                    "artist": "Artist One",
+                    "title": "Title One",
+                },
+                {
+                    "filename": "file2.mp3",
+                    "track": 2,
+                    "artist": "Artist Two",
+                    "title": "Title Two",
+                },
+            ],
+        }
+
+        yaml_file = Path(self.test_dir) / "test.yaml"
+        with open(yaml_file, "w") as f:
+            yaml.dump(yaml_config, f)
+
+        # Apply tags
+        os.chdir(self.test_dir)
+        tagger = Tagger(execute=True)
+        tagger.apply_yaml("test.yaml")
+
+        # Load YAML and verify filenames were updated
+        with open(yaml_file, "r") as f:
+            updated_data = yaml.safe_load(f)
+
+        expected_filename_1 = "01 Artist One - Title One.mp3"
+        expected_filename_2 = "02 Artist Two - Title Two.mp3"
+
+        assert updated_data["files"][0]["filename"] == expected_filename_1
+        assert updated_data["files"][1]["filename"] == expected_filename_2
+        assert Path(expected_filename_1).exists()
+        assert Path(expected_filename_2).exists()
+
+        # Apply YAML again to verify it works with updated filenames
+        tagger.apply_yaml("test.yaml")
+
+        # Both files should still exist with correct tags
+        tags1 = tagger.read_tags(Path(expected_filename_1))
+        tags2 = tagger.read_tags(Path(expected_filename_2))
+        assert tags1["artist"] == "Artist One"
+        assert tags2["artist"] == "Artist Two"
