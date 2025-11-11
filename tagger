@@ -504,8 +504,17 @@ class Tagger:
 
         # Fields to compare (excluding 'filename' which is not a tag)
         comparable_fields = [
-            "track", "artist", "title", "album", "albumartist",
-            "genre", "year", "compilation", "label", "bandcamp_id", "artwork"
+            "track",
+            "artist",
+            "title",
+            "album",
+            "albumartist",
+            "genre",
+            "year",
+            "compilation",
+            "label",
+            "bandcamp_id",
+            "artwork",
         ]
 
         for field in comparable_fields:
