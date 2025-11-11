@@ -312,3 +312,211 @@ class TestTagApplication:
         tags2 = tagger.read_tags(Path(expected_filename_2))
         assert tags1["artist"] == "Artist One"
         assert tags2["artist"] == "Artist Two"
+
+    def test_dry_run_no_output_when_tags_match(self, capsys):
+        """Test that dry-run mode shows no output when tags already match YAML"""
+        # Copy dummy MP3 to test directory
+        src_mp3 = self.fixtures_dir / "dummy.mp3"
+        test_mp3 = Path(self.test_dir) / "test.mp3"
+        shutil.copy(src_mp3, test_mp3)
+
+        # Create YAML config
+        yaml_config = {
+            "defaults": {
+                "album": "Test Album",
+                "year": 2024,
+            },
+            "files": [
+                {
+                    "filename": "test.mp3",
+                    "track": 1,
+                    "artist": "Test Artist",
+                    "title": "Test Title",
+                }
+            ],
+        }
+
+        yaml_file = Path(self.test_dir) / "test.yaml"
+        with open(yaml_file, "w") as f:
+            yaml.dump(yaml_config, f)
+
+        # Apply tags in execute mode first
+        os.chdir(self.test_dir)
+        tagger_exec = Tagger(execute=True)
+        tagger_exec.apply_yaml("test.yaml")
+
+        # Now run in dry-run mode - should show no "Would update" since tags match
+        tagger_dry = Tagger(execute=False)
+        capsys.readouterr()  # Clear any previous output
+        tagger_dry.apply_yaml("test.yaml")
+
+        captured = capsys.readouterr()
+        # Should not contain "Would update tags for:"
+        assert "Would update tags for:" not in captured.out
+
+    def test_dry_run_shows_files_with_differences(self, capsys):
+        """Test that dry-run mode only shows files that need updating"""
+        # Copy dummy MP3s to test directory
+        src_mp3 = self.fixtures_dir / "dummy.mp3"
+        test_mp3_1 = Path(self.test_dir) / "test1.mp3"
+        test_mp3_2 = Path(self.test_dir) / "test2.mp3"
+        shutil.copy(src_mp3, test_mp3_1)
+        shutil.copy(src_mp3, test_mp3_2)
+
+        # Create YAML config
+        yaml_config = {
+            "defaults": {
+                "album": "Test Album",
+                "year": 2024,
+            },
+            "files": [
+                {
+                    "filename": "test1.mp3",
+                    "track": 1,
+                    "artist": "Artist One",
+                    "title": "Title One",
+                },
+                {
+                    "filename": "test2.mp3",
+                    "track": 2,
+                    "artist": "Artist Two",
+                    "title": "Title Two",
+                },
+            ],
+        }
+
+        yaml_file = Path(self.test_dir) / "test.yaml"
+        with open(yaml_file, "w") as f:
+            yaml.dump(yaml_config, f)
+
+        # Apply tags in execute mode to first file only
+        os.chdir(self.test_dir)
+        tagger_exec = Tagger(execute=True)
+        tagger_exec.write_tags(
+            test_mp3_1,
+            {
+                "track": 1,
+                "artist": "Artist One",
+                "title": "Title One",
+                "album": "Test Album",
+                "year": 2024,
+            },
+        )
+
+        # Leave test2.mp3 with different/no tags
+
+        # Now run in dry-run mode
+        tagger_dry = Tagger(execute=False)
+        capsys.readouterr()  # Clear any previous output
+        tagger_dry.apply_yaml("test.yaml")
+
+        captured = capsys.readouterr()
+        # Should show test2.mp3 but not test1.mp3
+        assert "Would update tags for: test2.mp3" in captured.out
+        assert "Would update tags for: test1.mp3" not in captured.out
+
+    def test_execute_mode_skips_files_with_no_differences(self):
+        """Test that execute mode skips updating files when tags already match"""
+        # Copy dummy MP3 to test directory
+        src_mp3 = self.fixtures_dir / "dummy.mp3"
+        test_mp3 = Path(self.test_dir) / "test.mp3"
+        shutil.copy(src_mp3, test_mp3)
+
+        # Create YAML config
+        yaml_config = {
+            "defaults": {
+                "album": "Test Album",
+                "year": 2024,
+            },
+            "files": [
+                {
+                    "filename": "test.mp3",
+                    "track": 1,
+                    "artist": "Test Artist",
+                    "title": "Test Title",
+                }
+            ],
+        }
+
+        yaml_file = Path(self.test_dir) / "test.yaml"
+        with open(yaml_file, "w") as f:
+            yaml.dump(yaml_config, f)
+
+        # Apply tags first time
+        os.chdir(self.test_dir)
+        tagger = Tagger(execute=True)
+        tagger.apply_yaml("test.yaml")
+
+        # Get file modification time
+        renamed_file = Path("01 Test Artist - Test Title.mp3")
+        first_mtime = renamed_file.stat().st_mtime
+
+        # Apply tags second time - file should not be modified since tags match
+        import time
+
+        time.sleep(0.1)  # Small delay to ensure different mtime if file is modified
+        tagger.apply_yaml("test.yaml")
+
+        second_mtime = renamed_file.stat().st_mtime
+        # File should not have been modified
+        assert first_mtime == second_mtime
+
+    def test_compare_tags_detects_differences(self):
+        """Test the _compare_tags method correctly identifies differences"""
+        tagger = Tagger(execute=False)
+
+        # Test with no differences
+        current = {
+            "track": 1,
+            "artist": "Artist",
+            "title": "Title",
+            "album": "Album",
+            "year": 2024,
+        }
+        expected = {
+            "track": 1,
+            "artist": "Artist",
+            "title": "Title",
+            "album": "Album",
+            "year": 2024,
+        }
+        differences = tagger._compare_tags(current, expected)
+        assert len(differences) == 0
+
+        # Test with differences
+        current = {
+            "track": 1,
+            "artist": "Old Artist",
+            "title": "Old Title",
+            "album": "Album",
+            "year": 2024,
+        }
+        expected = {
+            "track": 1,
+            "artist": "New Artist",
+            "title": "New Title",
+            "album": "Album",
+            "year": 2024,
+        }
+        differences = tagger._compare_tags(current, expected)
+        assert len(differences) == 2
+        assert "artist" in differences
+        assert "title" in differences
+        assert differences["artist"] == ("Old Artist", "New Artist")
+        assert differences["title"] == ("Old Title", "New Title")
+
+        # Test with None values in expected (should not be considered different)
+        current = {
+            "track": 1,
+            "artist": "Artist",
+            "title": "Title",
+            "album": "Album",
+        }
+        expected = {
+            "track": 1,
+            "artist": "Artist",
+            "title": "Title",
+            "year": None,  # None means don't care
+        }
+        differences = tagger._compare_tags(current, expected)
+        assert len(differences) == 0
