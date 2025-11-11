@@ -493,12 +493,71 @@ class Tagger:
 
         return tags
 
+    def _compare_tags(
+        self, current: dict[str, any], expected: dict[str, any]
+    ) -> dict[str, tuple[any, any]]:
+        """
+        Compare current tags with expected tags and return differences.
+        Returns a dict of {field: (current_value, expected_value)} for fields that differ.
+        """
+        differences = {}
+
+        # Fields to compare (excluding 'filename' which is not a tag)
+        comparable_fields = [
+            "track",
+            "artist",
+            "title",
+            "album",
+            "albumartist",
+            "genre",
+            "year",
+            "compilation",
+            "label",
+            "bandcamp_id",
+            "artwork",
+        ]
+
+        for field in comparable_fields:
+            expected_value = expected.get(field)
+            current_value = current.get(field)
+
+            # Special handling for artwork
+            if field == "artwork":
+                # If YAML specifies a file path, we need to check if it matches embedded artwork
+                if expected_value and expected_value != "<embedded>":
+                    # YAML wants to set artwork from file
+                    if current_value != "<embedded>":
+                        differences[field] = (current_value, expected_value)
+                elif expected_value == "<embedded>":
+                    # YAML expects embedded artwork to exist
+                    if current_value != "<embedded>":
+                        differences[field] = (current_value, expected_value)
+                # If expected_value is None, we don't care about artwork
+                continue
+
+            # For other fields, only compare if expected value is not None
+            # (None means "not specified in YAML, don't modify")
+            if expected_value is not None and current_value != expected_value:
+                differences[field] = (current_value, expected_value)
+
+        return differences
+
     def write_tags(self, filepath: Path, tags: dict[str, any]) -> bool:
         """Write tags to an audio file"""
         ext = filepath.suffix.lower()
 
+        # Read current tags to check if update is needed
+        current_tags = self.read_tags(filepath)
+        differences = self._compare_tags(current_tags, tags)
+
         if self.dry_run:
-            self.log(f"Would update tags for: {filepath}")
+            if differences:
+                self.log(f"Would update tags for: {filepath}")
+            # Don't output anything if tags are already up-to-date
+            return True
+
+        # Skip update if no differences
+        if not differences:
             return True
 
         try:
