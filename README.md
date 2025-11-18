@@ -121,6 +121,7 @@ The `defaults` section is optional and allows you to specify common metadata tha
 - `albumartist`: Album artist
 - `genre`: Music genre
 - `year`: Release year
+- `disc`: Disc number (for multi-disc albums)
 - `artwork`: Path to artwork image file
 - `compilation`: Boolean flag for compilation albums
 
@@ -149,6 +150,7 @@ files:
 ### Optional Fields
 
 - `track`: Track number
+- `disc`: Disc number (for multi-disc albums)
 - `artist`: Artist name (can be empty or omitted for artist-less tracks)
 - `album`: Album name
 - `albumartist`: Album artist (for compilations)
@@ -240,6 +242,7 @@ Invalid filename characters (`<>:"/\|?*`) are replaced with underscores.
 - Genre (TCON)
 - Year (TDRC)
 - Track Number (TRCK)
+- Disc Number (TPOS)
 - Compilation (TCMP)
 - Artwork (APIC)
 
@@ -252,6 +255,7 @@ Invalid filename characters (`<>:"/\|?*`) are replaced with underscores.
 - Genre (©gen)
 - Year (©day)
 - Track Number (trkn)
+- Disc Number (disk)
 - Compilation (cpil)
 - Artwork (covr)
 
