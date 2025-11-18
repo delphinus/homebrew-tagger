@@ -54,6 +54,27 @@ class TestDefaultsValidation:
         errors = exc_info.value.errors()
         assert any("extra" in str(e["type"]).lower() for e in errors)
 
+    def test_disc_valid(self):
+        """Test valid disc number"""
+        defaults = Defaults(disc=1)
+        assert defaults.disc == 1
+
+    def test_disc_zero_rejected(self):
+        """Test that disc number 0 is rejected"""
+        with pytest.raises(ValidationError) as exc_info:
+            Defaults(disc=0)
+
+        errors = exc_info.value.errors()
+        assert any("Disc number must be positive" in str(e["msg"]) for e in errors)
+
+    def test_disc_negative_rejected(self):
+        """Test that negative disc number is rejected"""
+        with pytest.raises(ValidationError) as exc_info:
+            Defaults(disc=-1)
+
+        errors = exc_info.value.errors()
+        assert any("Disc number must be positive" in str(e["msg"]) for e in errors)
+
 
 class TestFileEntryValidation:
     """Test FileEntry model validation"""
@@ -89,6 +110,27 @@ class TestFileEntryValidation:
 
         errors = exc_info.value.errors()
         assert any("Track number must be positive" in str(e["msg"]) for e in errors)
+
+    def test_disc_valid(self):
+        """Test valid disc number in file entry"""
+        entry = FileEntry(filename="test.mp3", disc=1, title="Test")
+        assert entry.disc == 1
+
+    def test_disc_zero_rejected(self):
+        """Test that disc number 0 is rejected"""
+        with pytest.raises(ValidationError) as exc_info:
+            FileEntry(filename="test.mp3", disc=0)
+
+        errors = exc_info.value.errors()
+        assert any("Disc number must be positive" in str(e["msg"]) for e in errors)
+
+    def test_disc_negative_rejected(self):
+        """Test that negative disc number is rejected"""
+        with pytest.raises(ValidationError) as exc_info:
+            FileEntry(filename="test.mp3", disc=-1)
+
+        errors = exc_info.value.errors()
+        assert any("Disc number must be positive" in str(e["msg"]) for e in errors)
 
 
 class TestTaggerConfigValidation:

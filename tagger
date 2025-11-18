@@ -30,6 +30,7 @@ try:
         TIT2,
         TPE1,
         TPE2,
+        TPOS,
         TRCK,
         TXXX,
     )
@@ -66,6 +67,7 @@ class Defaults(BaseModel):
     compilation: bool | None = None
     label: str | None = None
     bandcamp_id: str | None = None
+    disc: int | None = None
 
     @field_validator("year")
     @classmethod
@@ -73,6 +75,14 @@ class Defaults(BaseModel):
         """Validate year is reasonable"""
         if v is not None and (v < 1900 or v > 2100):
             raise ValueError("Year must be between 1900 and 2100")
+        return v
+
+    @field_validator("disc")
+    @classmethod
+    def validate_disc(cls, v: int | None) -> int | None:
+        """Validate disc number is positive"""
+        if v is not None and v < 1:
+            raise ValueError("Disc number must be positive")
         return v
 
 
@@ -93,6 +103,7 @@ class FileEntry(BaseModel):
     compilation: bool | None = None
     label: str | None = None
     bandcamp_id: str | None = None
+    disc: int | None = None
 
     @field_validator("track")
     @classmethod
@@ -108,6 +119,14 @@ class FileEntry(BaseModel):
         """Validate year is reasonable"""
         if v is not None and (v < 1900 or v > 2100):
             raise ValueError("Year must be between 1900 and 2100")
+        return v
+
+    @field_validator("disc")
+    @classmethod
+    def validate_disc(cls, v: int | None) -> int | None:
+        """Validate disc number is positive"""
+        if v is not None and v < 1:
+            raise ValueError("Disc number must be positive")
         return v
 
 
@@ -391,6 +410,7 @@ class Tagger:
             "compilation": None,
             "label": None,
             "bandcamp_id": None,
+            "disc": None,
         }
 
         try:
@@ -404,6 +424,15 @@ class Tagger:
                             int(track_str.split("/")[0])
                             if "/" in track_str
                             else int(track_str)
+                        )
+
+                    # Disc number
+                    if "TPOS" in audio.tags:
+                        disc_str = str(audio.tags["TPOS"])
+                        tags["disc"] = (
+                            int(disc_str.split("/")[0])
+                            if "/" in disc_str
+                            else int(disc_str)
                         )
 
                     # Text fields
@@ -450,6 +479,8 @@ class Tagger:
                         tags["year"] = int(audio.tags["\xa9day"][0])
                     if "trkn" in audio.tags:
                         tags["track"] = audio.tags["trkn"][0][0]
+                    if "disk" in audio.tags:
+                        tags["disc"] = audio.tags["disk"][0][0]
                     if "cpil" in audio.tags:
                         tags["compilation"] = bool(audio.tags["cpil"][0])
 
@@ -515,6 +546,7 @@ class Tagger:
             "label",
             "bandcamp_id",
             "artwork",
+            "disc",
         ]
 
         for field in comparable_fields:
@@ -583,6 +615,8 @@ class Tagger:
                     audio.tags.add(TDRC(encoding=3, text=str(tags["year"])))
                 if tags.get("track"):
                     audio.tags.add(TRCK(encoding=3, text=str(tags["track"])))
+                if tags.get("disc"):
+                    audio.tags.add(TPOS(encoding=3, text=str(tags["disc"])))
                 if tags.get("compilation") is not None:
                     audio.tags.add(
                         TCMP(encoding=3, text="1" if tags["compilation"] else "0")
@@ -636,6 +670,8 @@ class Tagger:
                     audio.tags["\xa9day"] = str(tags["year"])
                 if tags.get("track"):
                     audio.tags["trkn"] = [(tags["track"], 0)]
+                if tags.get("disc"):
+                    audio.tags["disk"] = [(tags["disc"], 0)]
                 if tags.get("compilation") is not None:
                     audio.tags["cpil"] = [tags["compilation"]]
 
@@ -929,6 +965,7 @@ class Tagger:
             "compilation",
             "label",
             "bandcamp_id",
+            "disc",
         ]
         defaults = {}
 

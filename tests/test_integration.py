@@ -520,3 +520,121 @@ class TestTagApplication:
         }
         differences = tagger._compare_tags(current, expected)
         assert len(differences) == 0
+
+
+class TestDiscNumberSupport:
+    """Test disc number support for multi-disc albums"""
+
+    def setup_method(self):
+        """Set up test environment with temporary directory"""
+        self.test_dir = tempfile.mkdtemp()
+        self.fixtures_dir = Path(__file__).parent / "fixtures"
+
+    def teardown_method(self):
+        """Clean up temporary directory"""
+        shutil.rmtree(self.test_dir)
+
+    def test_disc_number_mp3(self):
+        """Test applying disc number to MP3 file"""
+        # Copy dummy MP3 to test directory
+        src_mp3 = self.fixtures_dir / "dummy.mp3"
+        test_mp3 = Path(self.test_dir) / "test.mp3"
+        shutil.copy(src_mp3, test_mp3)
+
+        # Create YAML config with disc number
+        yaml_config = {
+            "defaults": {
+                "album": "Multi-Disc Album",
+                "disc": 1,
+            },
+            "files": [
+                {
+                    "filename": "test.mp3",
+                    "track": 1,
+                    "artist": "Test Artist",
+                    "title": "Test Title",
+                }
+            ],
+        }
+
+        yaml_file = Path(self.test_dir) / "test.yaml"
+        with open(yaml_file, "w") as f:
+            yaml.dump(yaml_config, f)
+
+        # Apply tags
+        os.chdir(self.test_dir)
+        tagger = Tagger(execute=True)
+        tagger.apply_yaml("test.yaml")
+
+        # Verify disc number was applied
+        tags = tagger.read_tags(Path("01 Test Artist - Test Title.mp3"))
+        assert tags["disc"] == 1
+
+    def test_disc_number_m4a(self):
+        """Test applying disc number to M4A file"""
+        # Copy dummy M4A to test directory
+        src_m4a = self.fixtures_dir / "dummy.m4a"
+        test_m4a = Path(self.test_dir) / "test.m4a"
+        shutil.copy(src_m4a, test_m4a)
+
+        # Create YAML config with disc number
+        yaml_config = {
+            "defaults": {
+                "album": "Multi-Disc Album",
+                "disc": 2,
+            },
+            "files": [
+                {
+                    "filename": "test.m4a",
+                    "track": 1,
+                    "artist": "M4A Artist",
+                    "title": "M4A Title",
+                }
+            ],
+        }
+
+        yaml_file = Path(self.test_dir) / "test.yaml"
+        with open(yaml_file, "w") as f:
+            yaml.dump(yaml_config, f)
+
+        # Apply tags
+        os.chdir(self.test_dir)
+        tagger = Tagger(execute=True)
+        tagger.apply_yaml("test.yaml")
+
+        # Verify disc number was applied
+        tags = tagger.read_tags(Path("01 M4A Artist - M4A Title.m4a"))
+        assert tags["disc"] == 2
+
+    def test_disc_number_in_generated_yaml(self):
+        """Test that disc number appears in generated YAML"""
+        # Copy dummy MP3 to test directory
+        src_mp3 = self.fixtures_dir / "dummy.mp3"
+        test_mp3 = Path(self.test_dir) / "test.mp3"
+        shutil.copy(src_mp3, test_mp3)
+
+        # Add tags including disc number
+        os.chdir(self.test_dir)
+        tagger = Tagger(execute=True)
+        tagger.write_tags(
+            test_mp3,
+            {
+                "track": 1,
+                "artist": "Artist",
+                "title": "Song",
+                "album": "Album",
+                "disc": 1,
+            },
+        )
+
+        # Generate YAML
+        tagger.generate_yaml("generated.yaml")
+
+        # Load and verify YAML
+        with open("generated.yaml", "r") as f:
+            data = yaml.safe_load(f)
+
+        # Disc should be in defaults or file entry
+        assert data.get("defaults", {}).get("disc") == 1 or data["files"][0].get(
+            "disc"
+        ) == 1
