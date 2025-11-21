@@ -183,6 +183,39 @@ class TestTaggerConfigValidation:
         assert len(config.files) == 1
 
 
+class TestFilenameParsingPatterns:
+    """Test filename parsing patterns"""
+
+    def test_parse_dot_format_filename(self):
+        """Test parsing '1. Artist - Title.mp3' format"""
+        tagger = Tagger()
+        result = tagger.parse_filename("1. Squad-E - Album Intro.mp3")
+
+        assert result["track"] == 1
+        assert result["artist"] == "Squad-E"
+        assert result["title"] == "Album Intro"
+
+    def test_parse_dot_format_two_digits(self):
+        """Test parsing '10. Artist - Title.mp3' format"""
+        tagger = Tagger()
+        result = tagger.parse_filename(
+            "10. Squad-E & Esline - Invisible Feat. Lisa Abbott.mp3"
+        )
+
+        assert result["track"] == 10
+        assert result["artist"] == "Squad-E & Esline"
+        assert result["title"] == "Invisible Feat. Lisa Abbott"
+
+    def test_parse_padded_format_still_works(self):
+        """Test that existing '01 Artist - Title.mp3' format still works"""
+        tagger = Tagger()
+        result = tagger.parse_filename("01 Artist - Title.mp3")
+
+        assert result["track"] == 1
+        assert result["artist"] == "Artist"
+        assert result["title"] == "Title"
+
+
 class TestBandcampSupport:
     """Test Bandcamp format support"""
 

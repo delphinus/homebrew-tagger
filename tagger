@@ -313,6 +313,7 @@ class Tagger:
 
         Supported patterns (spaces are flexible, 1+ spaces allowed):
         - Label - Artist - Title [ID].mp3 -> label="Label", artist="Artist", title="Title", bandcamp_id="ID"
+        - 1. Artist - Title.mp3 -> track=1, artist="Artist", title="Title"
         - 01 Artist - Title.mp3 -> track=1, artist="Artist", title="Title"
         - 01  - Title.mp3 -> track=1, artist="", title="Title"
         - 01 Title.mp3 -> track=1, artist="", title="Title"
@@ -344,7 +345,19 @@ class Tagger:
                 "bandcamp_id": bandcamp_id if bandcamp_id else None,
             }
 
-        # Pattern 1: "01 Artist - Title" (track + artist + title)
+        # Pattern 1: "1. Artist - Title" (track with dot + artist + title)
+        match = re.match(r"^(\d+)\.\s+(.+?)\s+-\s+(.+)$", name)
+        if match:
+            track = int(match.group(1))
+            artist = match.group(2).strip()
+            title = match.group(3).strip()
+            return {
+                "track": track,
+                "artist": artist if artist else None,
+                "title": title if title else None,
+            }
+
+        # Pattern 2: "01 Artist - Title" (track + artist + title)
         match = re.match(r"^(\d+)\s+(.+?)\s+-\s+(.+)$", name)
         if match:
             track = int(match.group(1))
@@ -356,7 +369,7 @@ class Tagger:
                 "title": title if title else None,
             }
 
-        # Pattern 2: "01  - Title" (track + title, no artist)
+        # Pattern 3: "01  - Title" (track + title, no artist)
         match = re.match(r"^(\d+)\s+-\s+(.+)$", name)
         if match:
             track = int(match.group(1))
@@ -368,7 +381,7 @@ class Tagger:
                 "title": title if title else None,
             }
 
-        # Pattern 3: "01 Title" (track + title, no separator)
+        # Pattern 4: "01 Title" (track + title, no separator)
         match = re.match(r"^(\d+)\s+(.+)$", name)
         if match:
             track = int(match.group(1))
@@ -380,7 +393,7 @@ class Tagger:
                 "title": title if title else None,
             }
 
-        # Pattern 4: "Artist - Title" (artist + title, no track)
+        # Pattern 5: "Artist - Title" (artist + title, no track)
         match = re.match(r"^(.+?)\s+-\s+(.+)$", name)
         if match:
             track = None
@@ -392,7 +405,7 @@ class Tagger:
                 "title": title if title else None,
             }
 
-        # Pattern 5: "Title" (title only)
+        # Pattern 6: "Title" (title only)
         title = name.strip()
         return {
             "track": None,
@@ -1080,11 +1093,25 @@ class Tagger:
                     for field in defaults:
                         entry.pop(field, None)
 
+        # Sort entries by track number (entries without track number go last)
+        def get_track_sort_key(entry):
+            track = entry.get("track")
+            if track is None:
+                # Check if track is in defaults
+                track = defaults.get("track")
+            # Return tuple: (has_track, track_number)
+            # Entries without track go last (True > False)
+            if track is None:
+                return (True, 0)
+            return (False, track)
+
+        entries_sorted = sorted(entries, key=get_track_sort_key)
+
         # Create YAML structure
         yaml_data = {}
         if defaults:
             yaml_data["defaults"] = defaults
-        yaml_data["files"] = entries
+        yaml_data["files"] = entries_sorted
 
         # Validate YAML structure
         try:
@@ -1197,8 +1224,20 @@ class Tagger:
 
         # Update YAML file with new filenames
         if not self.dry_run:
-            # Update the files list in data with the modified files_data
-            data["files"] = files_data
+            # Sort files by track number (files without track number go last)
+            def get_track_sort_key(file_data):
+                merged = defaults | file_data
+                track = merged.get("track")
+                # Return tuple: (has_track, track_number)
+                # Files without track go last (True > False)
+                if track is None:
+                    return (True, 0)
+                return (False, track)
+
+            files_data_sorted = sorted(files_data, key=get_track_sort_key)
+
+            # Update the files list in data with the sorted files_data
+            data["files"] = files_data_sorted
             with open(yaml_file, "w", encoding="utf-8") as f:
                 yaml.dump(
                     data,
