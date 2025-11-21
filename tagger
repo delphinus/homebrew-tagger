@@ -313,6 +313,7 @@ class Tagger:
 
         Supported patterns (spaces are flexible, 1+ spaces allowed):
         - Label - Artist - Title [ID].mp3 -> label="Label", artist="Artist", title="Title", bandcamp_id="ID"
+        - 1. Artist - Title.mp3 -> track=1, artist="Artist", title="Title"
         - 01 Artist - Title.mp3 -> track=1, artist="Artist", title="Title"
         - 01  - Title.mp3 -> track=1, artist="", title="Title"
         - 01 Title.mp3 -> track=1, artist="", title="Title"
@@ -344,7 +345,19 @@ class Tagger:
                 "bandcamp_id": bandcamp_id if bandcamp_id else None,
             }
 
-        # Pattern 1: "01 Artist - Title" (track + artist + title)
+        # Pattern 1: "1. Artist - Title" (track with dot + artist + title)
+        match = re.match(r"^(\d+)\.\s+(.+?)\s+-\s+(.+)$", name)
+        if match:
+            track = int(match.group(1))
+            artist = match.group(2).strip()
+            title = match.group(3).strip()
+            return {
+                "track": track,
+                "artist": artist if artist else None,
+                "title": title if title else None,
+            }
+
+        # Pattern 2: "01 Artist - Title" (track + artist + title)
         match = re.match(r"^(\d+)\s+(.+?)\s+-\s+(.+)$", name)
         if match:
             track = int(match.group(1))
@@ -356,7 +369,7 @@ class Tagger:
                 "title": title if title else None,
             }
 
-        # Pattern 2: "01  - Title" (track + title, no artist)
+        # Pattern 3: "01  - Title" (track + title, no artist)
         match = re.match(r"^(\d+)\s+-\s+(.+)$", name)
         if match:
             track = int(match.group(1))
@@ -368,7 +381,7 @@ class Tagger:
                 "title": title if title else None,
             }
 
-        # Pattern 3: "01 Title" (track + title, no separator)
+        # Pattern 4: "01 Title" (track + title, no separator)
         match = re.match(r"^(\d+)\s+(.+)$", name)
         if match:
             track = int(match.group(1))
@@ -380,7 +393,7 @@ class Tagger:
                 "title": title if title else None,
             }
 
-        # Pattern 4: "Artist - Title" (artist + title, no track)
+        # Pattern 5: "Artist - Title" (artist + title, no track)
         match = re.match(r"^(.+?)\s+-\s+(.+)$", name)
         if match:
             track = None
@@ -392,7 +405,7 @@ class Tagger:
                 "title": title if title else None,
             }
 
-        # Pattern 5: "Title" (title only)
+        # Pattern 6: "Title" (title only)
         title = name.strip()
         return {
             "track": None,
