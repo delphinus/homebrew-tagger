@@ -458,7 +458,9 @@ class Tagger:
                         tags["compilation"] = str(audio.tags["TCMP"]) == "1"
 
                     # Artwork (APIC frames can have different descriptions like "APIC:Cover", "APIC:", etc.)
-                    has_artwork = any(key.startswith("APIC:") for key in audio.tags.keys())
+                    has_artwork = any(
+                        key.startswith("APIC:") for key in audio.tags.keys()
+                    )
                     if has_artwork:
                         tags["artwork"] = "<embedded>"
 
