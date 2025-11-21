@@ -966,9 +966,7 @@ class Tagger:
                 f"\n{self.color('✓', 'green')} Current directory state matches {self.color(yaml_file, 'cyan')}"
             )
 
-    def generate_yaml(
-        self, output_file: str = "tagger.yaml", interactive: bool = True
-    ):
+    def generate_yaml(self, output_file: str = "tagger.yaml", interactive: bool = True):
         """Generate YAML file from current directory audio files
 
         Args:
