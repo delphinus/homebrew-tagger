@@ -3,8 +3,8 @@ class Tagger < Formula
 
   desc "Audio file tag and filename manager using mutagen"
   homepage "https://github.com/delphinus/homebrew-tagger"
-  url "https://github.com/delphinus/homebrew-tagger/archive/refs/tags/v1.8.0.tar.gz"
-  sha256 "1663741eb2ea54bc871f886478c8b08194fefed8c7911a4e0a3cfc6040f7cf8d"
+  url "https://github.com/delphinus/homebrew-tagger/archive/refs/tags/v1.8.1.tar.gz"
+  sha256 "4d0be1b5f3d2e4a442ad5fdc6e99eba22703c73a3027a6a81470e1d8364dd65b"
   license "MIT"
 
   depends_on "python@3.12"
