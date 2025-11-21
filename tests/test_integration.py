@@ -542,9 +542,7 @@ class TestTrackNumberPadding:
 
         # Create YAML with 9 tracks
         yaml_config = {
-            "files": [
-                {"filename": "test.mp3", "track": 5, "title": "Track Five"}
-            ]
+            "files": [{"filename": "test.mp3", "track": 5, "title": "Track Five"}]
         }
 
         yaml_file = Path(self.test_dir) / "test.yaml"
@@ -764,9 +762,7 @@ class TestArtworkDetection:
 
         # Add artwork without description (empty string)
         audio.tags.add(
-            APIC(
-                encoding=3, mime="image/png", type=3, desc="", data=png_data
-            )
+            APIC(encoding=3, mime="image/png", type=3, desc="", data=png_data)
         )
         audio.save()
 
@@ -787,6 +783,99 @@ class TestArtworkDetection:
         tagger = Tagger(execute=False)
         tags = tagger.read_tags(test_mp3)
         assert tags.get("artwork") is None
+
+
+class TestTrackSorting:
+    """Test track number sorting in YAML files"""
+
+    def setup_method(self):
+        """Set up test environment with temporary directory"""
+        self.test_dir = tempfile.mkdtemp()
+        self.fixtures_dir = Path(__file__).parent / "fixtures"
+
+    def teardown_method(self):
+        """Clean up temporary directory"""
+        shutil.rmtree(self.test_dir)
+
+    def test_yaml_files_sorted_by_track_on_apply(self):
+        """Test that YAML files are sorted by track number when applying"""
+        # Copy dummy MP3s to test directory
+        src_mp3 = self.fixtures_dir / "dummy.mp3"
+        test_mp3_1 = Path(self.test_dir) / "file1.mp3"
+        test_mp3_2 = Path(self.test_dir) / "file2.mp3"
+        test_mp3_3 = Path(self.test_dir) / "file3.mp3"
+        shutil.copy(src_mp3, test_mp3_1)
+        shutil.copy(src_mp3, test_mp3_2)
+        shutil.copy(src_mp3, test_mp3_3)
+
+        # Create YAML config with files in wrong order
+        yaml_config = {
+            "defaults": {"album": "Test Album"},
+            "files": [
+                {
+                    "filename": "file3.mp3",
+                    "track": 3,
+                    "title": "Title Three",
+                },
+                {
+                    "filename": "file1.mp3",
+                    "track": 1,
+                    "title": "Title One",
+                },
+                {
+                    "filename": "file2.mp3",
+                    "track": 2,
+                    "title": "Title Two",
+                },
+            ],
+        }
+
+        yaml_file = Path(self.test_dir) / "test.yaml"
+        with open(yaml_file, "w") as f:
+            yaml.dump(yaml_config, f)
+
+        # Apply tags
+        os.chdir(self.test_dir)
+        tagger = Tagger(execute=True)
+        tagger.apply_yaml("test.yaml")
+
+        # Load YAML and verify files are sorted by track number
+        with open(yaml_file, "r") as f:
+            updated_data = yaml.safe_load(f)
+
+        assert len(updated_data["files"]) == 3
+        assert updated_data["files"][0]["track"] == 1
+        assert updated_data["files"][1]["track"] == 2
+        assert updated_data["files"][2]["track"] == 3
+
+    def test_yaml_files_sorted_on_generate(self):
+        """Test that generated YAML has files sorted by track number"""
+        # Copy dummy MP3s to test directory with names in wrong order
+        src_mp3 = self.fixtures_dir / "dummy.mp3"
+        test_mp3_1 = Path(self.test_dir) / "03 Title Three.mp3"
+        test_mp3_2 = Path(self.test_dir) / "01 Title One.mp3"
+        test_mp3_3 = Path(self.test_dir) / "02 Title Two.mp3"
+        shutil.copy(src_mp3, test_mp3_1)
+        shutil.copy(src_mp3, test_mp3_2)
+        shutil.copy(src_mp3, test_mp3_3)
+
+        # Generate YAML (non-interactive for testing)
+        os.chdir(self.test_dir)
+        tagger = Tagger(execute=True)
+        tagger.generate_yaml("generated.yaml", interactive=False)
+
+        # Load and verify YAML
+        with open("generated.yaml", "r") as f:
+            data = yaml.safe_load(f)
+
+        # Files should be sorted by track number
+        assert len(data["files"]) == 3
+        assert data["files"][0]["track"] == 1
+        assert data["files"][0]["title"] == "Title One"
+        assert data["files"][1]["track"] == 2
+        assert data["files"][1]["title"] == "Title Two"
+        assert data["files"][2]["track"] == 3
+        assert data["files"][2]["title"] == "Title Three"
 
 
 class TestDiscNumberSupport:
@@ -902,6 +991,7 @@ class TestDiscNumberSupport:
             data = yaml.safe_load(f)
 
         # Disc should be in defaults or file entry
-        assert data.get("defaults", {}).get("disc") == 1 or data["files"][0].get(
-            "disc"
-        ) == 1
+        assert (
+            data.get("defaults", {}).get("disc") == 1
+            or data["files"][0].get("disc") == 1
+        )
