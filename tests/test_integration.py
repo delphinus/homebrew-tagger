@@ -687,6 +687,108 @@ class TestFilenamePreference:
         assert file_entry["title"] == "Tag Title"  # from tags
 
 
+class TestArtworkDetection:
+    """Test artwork detection with different APIC frame descriptions"""
+
+    def setup_method(self):
+        """Set up test environment with temporary directory"""
+        self.test_dir = tempfile.mkdtemp()
+        self.fixtures_dir = Path(__file__).parent / "fixtures"
+
+    def teardown_method(self):
+        """Clean up temporary directory"""
+        shutil.rmtree(self.test_dir)
+
+    def test_artwork_detection_with_description(self):
+        """Test that artwork is detected even when APIC frame has a description like 'Cover'"""
+        src_mp3 = self.fixtures_dir / "dummy.mp3"
+        test_mp3 = Path(self.test_dir) / "test.mp3"
+        shutil.copy(src_mp3, test_mp3)
+
+        os.chdir(self.test_dir)
+
+        # Add artwork with description "Cover"
+        from mutagen.id3 import ID3, APIC
+        from mutagen.mp3 import MP3
+
+        audio = MP3(test_mp3, ID3=ID3)
+        if audio.tags is None:
+            audio.add_tags()
+
+        # Create a small PNG image (1x1 pixel)
+        png_data = (
+            b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
+            b"\x08\x02\x00\x00\x00\x90wS\xde\x00\x00\x00\x0cIDATx\x9cc\x00\x01"
+            b"\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82"
+        )
+
+        # Add artwork with description "Cover"
+        audio.tags.add(
+            APIC(
+                encoding=3,
+                mime="image/png",
+                type=3,  # Cover (front)
+                desc="Cover",
+                data=png_data,
+            )
+        )
+        audio.save()
+
+        # Read tags and verify artwork is detected
+        tagger = Tagger(execute=False)
+        tags = tagger.read_tags(test_mp3)
+        assert tags["artwork"] == "<embedded>"
+
+    def test_artwork_detection_without_description(self):
+        """Test that artwork is detected even when APIC frame has no description"""
+        src_mp3 = self.fixtures_dir / "dummy.mp3"
+        test_mp3 = Path(self.test_dir) / "test.mp3"
+        shutil.copy(src_mp3, test_mp3)
+
+        os.chdir(self.test_dir)
+
+        # Add artwork without description
+        from mutagen.id3 import ID3, APIC
+        from mutagen.mp3 import MP3
+
+        audio = MP3(test_mp3, ID3=ID3)
+        if audio.tags is None:
+            audio.add_tags()
+
+        # Create a small PNG image
+        png_data = (
+            b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
+            b"\x08\x02\x00\x00\x00\x90wS\xde\x00\x00\x00\x0cIDATx\x9cc\x00\x01"
+            b"\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82"
+        )
+
+        # Add artwork without description (empty string)
+        audio.tags.add(
+            APIC(
+                encoding=3, mime="image/png", type=3, desc="", data=png_data
+            )
+        )
+        audio.save()
+
+        # Read tags and verify artwork is detected
+        tagger = Tagger(execute=False)
+        tags = tagger.read_tags(test_mp3)
+        assert tags["artwork"] == "<embedded>"
+
+    def test_no_artwork_detection(self):
+        """Test that files without artwork return None"""
+        src_mp3 = self.fixtures_dir / "dummy.mp3"
+        test_mp3 = Path(self.test_dir) / "test.mp3"
+        shutil.copy(src_mp3, test_mp3)
+
+        os.chdir(self.test_dir)
+
+        # Read tags and verify no artwork is detected
+        tagger = Tagger(execute=False)
+        tags = tagger.read_tags(test_mp3)
+        assert tags.get("artwork") is None
+
+
 class TestDiscNumberSupport:
     """Test disc number support for multi-disc albums"""
 
