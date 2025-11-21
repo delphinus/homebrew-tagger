@@ -181,8 +181,8 @@ class TestTagApplication:
             },
         )
 
-        # Generate YAML
-        tagger.generate_yaml("generated.yaml")
+        # Generate YAML (non-interactive for testing)
+        tagger.generate_yaml("generated.yaml", interactive=False)
 
         # Load and verify YAML
         with open("generated.yaml", "r") as f:
@@ -522,6 +522,171 @@ class TestTagApplication:
         assert len(differences) == 0
 
 
+class TestTrackNumberPadding:
+    """Test track number padding in filenames"""
+
+    def setup_method(self):
+        """Set up test environment with temporary directory"""
+        self.test_dir = tempfile.mkdtemp()
+        self.fixtures_dir = Path(__file__).parent / "fixtures"
+
+    def teardown_method(self):
+        """Clean up temporary directory"""
+        shutil.rmtree(self.test_dir)
+
+    def test_two_digit_padding_for_small_numbers(self):
+        """Test that track numbers are padded to at least 2 digits"""
+        src_mp3 = self.fixtures_dir / "dummy.mp3"
+        test_mp3 = Path(self.test_dir) / "test.mp3"
+        shutil.copy(src_mp3, test_mp3)
+
+        # Create YAML with 9 tracks
+        yaml_config = {
+            "files": [
+                {"filename": "test.mp3", "track": 5, "title": "Track Five"}
+            ]
+        }
+
+        yaml_file = Path(self.test_dir) / "test.yaml"
+        with open(yaml_file, "w") as f:
+            yaml.dump(yaml_config, f)
+
+        os.chdir(self.test_dir)
+        tagger = Tagger(execute=True)
+        tagger.apply_yaml("test.yaml")
+
+        # Should be 05, not 5
+        assert Path("05  - Track Five.mp3").exists()
+
+    def test_three_digit_padding_for_large_numbers(self):
+        """Test that track numbers pad to 3 digits when max is 100+"""
+        src_mp3 = self.fixtures_dir / "dummy.mp3"
+
+        # Create 3 test files
+        files_data = []
+        for i in [1, 50, 100]:
+            test_mp3 = Path(self.test_dir) / f"track{i}.mp3"
+            shutil.copy(src_mp3, test_mp3)
+            files_data.append(
+                {"filename": f"track{i}.mp3", "track": i, "title": f"Track {i}"}
+            )
+
+        yaml_config = {"files": files_data}
+
+        yaml_file = Path(self.test_dir) / "test.yaml"
+        with open(yaml_file, "w") as f:
+            yaml.dump(yaml_config, f)
+
+        os.chdir(self.test_dir)
+        tagger = Tagger(execute=True)
+        tagger.apply_yaml("test.yaml")
+
+        # All should use 3 digits
+        assert Path("001  - Track 1.mp3").exists()
+        assert Path("050  - Track 50.mp3").exists()
+        assert Path("100  - Track 100.mp3").exists()
+
+    def test_consistent_padding_within_album(self):
+        """Test that all files in an album use consistent padding"""
+        src_mp3 = self.fixtures_dir / "dummy.mp3"
+
+        # Create files with tracks 1-100
+        files_data = []
+        for i in [1, 10, 99, 100]:
+            test_mp3 = Path(self.test_dir) / f"track{i}.mp3"
+            shutil.copy(src_mp3, test_mp3)
+            files_data.append(
+                {"filename": f"track{i}.mp3", "track": i, "title": f"Song {i}"}
+            )
+
+        yaml_config = {"files": files_data}
+
+        yaml_file = Path(self.test_dir) / "test.yaml"
+        with open(yaml_file, "w") as f:
+            yaml.dump(yaml_config, f)
+
+        os.chdir(self.test_dir)
+        tagger = Tagger(execute=True)
+        tagger.apply_yaml("test.yaml")
+
+        # All should use 3 digits because max is 100
+        assert Path("001  - Song 1.mp3").exists()
+        assert Path("010  - Song 10.mp3").exists()
+        assert Path("099  - Song 99.mp3").exists()
+        assert Path("100  - Song 100.mp3").exists()
+
+
+class TestFilenamePreference:
+    """Test prefer_filename functionality"""
+
+    def setup_method(self):
+        """Set up test environment with temporary directory"""
+        self.test_dir = tempfile.mkdtemp()
+        self.fixtures_dir = Path(__file__).parent / "fixtures"
+
+    def teardown_method(self):
+        """Clean up temporary directory"""
+        shutil.rmtree(self.test_dir)
+
+    def test_prefer_filename_over_tags(self):
+        """Test that prefer_filename uses filename metadata over embedded tags"""
+        src_mp3 = self.fixtures_dir / "dummy.mp3"
+        # Create file with tags that differ from filename
+        test_mp3 = Path(self.test_dir) / "01 Real Artist - Real Title.mp3"
+        shutil.copy(src_mp3, test_mp3)
+
+        os.chdir(self.test_dir)
+
+        # Write different tags to the file
+        tagger = Tagger(execute=True)
+        tagger.write_tags(
+            test_mp3,
+            {"track": 99, "artist": "Wrong Artist", "title": "Wrong Title"},
+        )
+
+        # Generate YAML with prefer_filename
+        tagger_prefer = Tagger(execute=True, prefer_filename=True)
+        tagger_prefer.generate_yaml("generated.yaml", interactive=False)
+
+        # Load and verify YAML
+        with open("generated.yaml", "r") as f:
+            data = yaml.safe_load(f)
+
+        # Should use filename metadata
+        file_entry = data["files"][0]
+        assert file_entry["track"] == 1  # from filename, not 99
+        assert file_entry["artist"] == "Real Artist"  # from filename
+        assert file_entry["title"] == "Real Title"  # from filename
+
+    def test_default_prefers_embedded_tags(self):
+        """Test that by default, embedded tags are preferred"""
+        src_mp3 = self.fixtures_dir / "dummy.mp3"
+        # Create file with tags that differ from filename
+        test_mp3 = Path(self.test_dir) / "01 Filename Artist - Filename Title.mp3"
+        shutil.copy(src_mp3, test_mp3)
+
+        os.chdir(self.test_dir)
+
+        # Write different tags to the file
+        tagger = Tagger(execute=True)
+        tagger.write_tags(
+            test_mp3, {"track": 5, "artist": "Tag Artist", "title": "Tag Title"}
+        )
+
+        # Generate YAML without prefer_filename
+        tagger.generate_yaml("generated.yaml", interactive=False)
+
+        # Load and verify YAML
+        with open("generated.yaml", "r") as f:
+            data = yaml.safe_load(f)
+
+        # Should use embedded tags
+        file_entry = data["files"][0]
+        assert file_entry["track"] == 5  # from tags, not 1
+        assert file_entry["artist"] == "Tag Artist"  # from tags
+        assert file_entry["title"] == "Tag Title"  # from tags
+
+
 class TestDiscNumberSupport:
     """Test disc number support for multi-disc albums"""
 
@@ -627,8 +792,8 @@ class TestDiscNumberSupport:
             },
         )
 
-        # Generate YAML
-        tagger.generate_yaml("generated.yaml")
+        # Generate YAML (non-interactive for testing)
+        tagger.generate_yaml("generated.yaml", interactive=False)
 
         # Load and verify YAML
         with open("generated.yaml", "r") as f:

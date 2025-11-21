@@ -166,10 +166,16 @@ class Tagger:
         "dim": "\033[2m",
     }
 
-    def __init__(self, execute: bool = False, no_color: bool = False):
+    def __init__(
+        self,
+        execute: bool = False,
+        no_color: bool = False,
+        prefer_filename: bool = False,
+    ):
         self.execute = execute
         self.dry_run = not execute
         self.no_color = no_color or not sys.stdout.isatty()
+        self.prefer_filename = prefer_filename
 
     def color(self, text: str, *colors: str) -> str:
         """Apply color to text"""
@@ -502,8 +508,10 @@ class Tagger:
             self.log(f"Warning: Could not read tags from {filepath}: {e}")
 
         # If track, artist, title, label, or bandcamp_id is missing, try to parse from filename
+        # Or if prefer_filename is True, always parse and use filename values
         if (
-            tags["track"] is None
+            self.prefer_filename
+            or tags["track"] is None
             or tags["artist"] is None
             or tags["title"] is None
             or tags["label"] is None
@@ -511,15 +519,25 @@ class Tagger:
         ):
             parsed = self.parse_filename(filepath.name)
 
-            if tags["track"] is None and parsed.get("track") is not None:
+            if (self.prefer_filename or tags["track"] is None) and parsed.get(
+                "track"
+            ) is not None:
                 tags["track"] = parsed["track"]
-            if tags["artist"] is None and parsed.get("artist") is not None:
+            if (self.prefer_filename or tags["artist"] is None) and parsed.get(
+                "artist"
+            ) is not None:
                 tags["artist"] = parsed["artist"]
-            if tags["title"] is None and parsed.get("title") is not None:
+            if (self.prefer_filename or tags["title"] is None) and parsed.get(
+                "title"
+            ) is not None:
                 tags["title"] = parsed["title"]
-            if tags["label"] is None and parsed.get("label") is not None:
+            if (self.prefer_filename or tags["label"] is None) and parsed.get(
+                "label"
+            ) is not None:
                 tags["label"] = parsed["label"]
-            if tags["bandcamp_id"] is None and parsed.get("bandcamp_id") is not None:
+            if (self.prefer_filename or tags["bandcamp_id"] is None) and parsed.get(
+                "bandcamp_id"
+            ) is not None:
                 tags["bandcamp_id"] = parsed["bandcamp_id"]
 
         return tags
@@ -720,8 +738,15 @@ class Tagger:
             name = name.replace(char, "_")
         return name
 
-    def generate_filename(self, tags: dict[str, any]) -> str:
-        """Generate filename from tags"""
+    def generate_filename(
+        self, tags: dict[str, any], max_track: int | None = None
+    ) -> str:
+        """Generate filename from tags
+
+        Args:
+            tags: Dictionary of tag values
+            max_track: Maximum track number (for padding). If None, uses 2 digits minimum.
+        """
         track = tags.get("track", "")
         artist = tags.get("artist", "")
         title = tags.get("title", "Unknown Title")
@@ -730,14 +755,21 @@ class Tagger:
         original_filename = tags.get("filename", ".mp3")
         ext = Path(original_filename).suffix
 
+        # Determine padding width based on max_track
+        # Always use at least 2 digits, even if max_track is single digit
+        if max_track is not None and max_track > 0:
+            padding = max(2, len(str(max_track)))
+        else:
+            padding = 2  # Default to 2 digits
+
         # Build filename based on available metadata
         # Hyphens use 1 space before and after, except track-only uses 2 spaces before hyphen
         if track and artist:
-            # Format: 01 Artist - Title.mp3
-            filename = f"{track:02d} {artist} - {title}{ext}"
+            # Format: 01 Artist - Title.mp3 (or 001, 0001, etc. based on max_track)
+            filename = f"{track:0{padding}d} {artist} - {title}{ext}"
         elif track:
             # Format: 01  - Title.mp3 (no artist, 2 spaces before hyphen)
-            filename = f"{track:02d}  - {title}{ext}"
+            filename = f"{track:0{padding}d}  - {title}{ext}"
         elif artist:
             # Format: Artist - Title.mp3 (no track)
             filename = f"{artist} - {title}{ext}"
@@ -934,8 +966,15 @@ class Tagger:
                 f"\n{self.color('✓', 'green')} Current directory state matches {self.color(yaml_file, 'cyan')}"
             )
 
-    def generate_yaml(self, output_file: str = "tagger.yaml"):
-        """Generate YAML file from current directory audio files"""
+    def generate_yaml(
+        self, output_file: str = "tagger.yaml", interactive: bool = True
+    ):
+        """Generate YAML file from current directory audio files
+
+        Args:
+            output_file: Output YAML filename
+            interactive: If True, prompt user for preferences when conflicts exist
+        """
         # First, convert any .aac files to .m4a
         self.find_and_convert_aac_files()
 
@@ -946,6 +985,58 @@ class Tagger:
             return
 
         self.log(f"Found {len(files)} audio file(s)")
+
+        # Check if any files have both embedded tags and parseable filenames
+        # If so, ask user which to prefer
+        if interactive and not self.dry_run:
+            has_conflict = False
+            for filepath in files:
+                # Temporarily read tags without filename parsing
+                old_prefer = self.prefer_filename
+                self.prefer_filename = False
+                tags_only = self.read_tags(filepath)
+                self.prefer_filename = old_prefer
+
+                parsed = self.parse_filename(filepath.name)
+
+                # Check if both have artist and title
+                if (
+                    tags_only.get("artist")
+                    and parsed.get("artist")
+                    and tags_only.get("artist") != parsed.get("artist")
+                ) or (
+                    tags_only.get("title")
+                    and parsed.get("title")
+                    and tags_only.get("title") != parsed.get("title")
+                ):
+                    has_conflict = True
+                    break
+
+            if has_conflict:
+                print(
+                    "\n"
+                    + self.color(
+                        "Some files have different information in tags vs. filenames.",
+                        "yellow",
+                    )
+                )
+                print(
+                    "Which source should be preferred when generating the YAML file?\n"
+                )
+                print("  1. Embedded tags (default)")
+                print("  2. Filenames")
+                print()
+
+                while True:
+                    choice = input("Enter your choice (1 or 2) [1]: ").strip()
+                    if choice == "" or choice == "1":
+                        self.prefer_filename = False
+                        break
+                    elif choice == "2":
+                        self.prefer_filename = True
+                        break
+                    else:
+                        print("Invalid choice. Please enter 1 or 2.")
 
         # Read tags from all files
         entries = []
@@ -1065,6 +1156,14 @@ class Tagger:
         ]
         self.log(f"Processing {len(files_data)} file(s) from {yaml_file}")
 
+        # Calculate maximum track number for padding
+        max_track = 0
+        for file_data in files_data:
+            merged_data = defaults | file_data
+            track = merged_data.get("track")
+            if track is not None and track > max_track:
+                max_track = track
+
         for file_data in files_data:
             if "filename" not in file_data:
                 self.log("Warning: Skipping entry without 'filename'")
@@ -1083,8 +1182,10 @@ class Tagger:
             # Write tags
             self.write_tags(filepath, merged_data)
 
-            # Generate new filename
-            new_filename = self.generate_filename(merged_data)
+            # Generate new filename with proper track padding
+            new_filename = self.generate_filename(
+                merged_data, max_track if max_track > 0 else None
+            )
 
             # Rename file if needed
             new_path = self.rename_file(filepath, new_filename)
@@ -1166,9 +1267,19 @@ Note:
         help="Disable colored output",
     )
 
+    parser.add_argument(
+        "--prefer-filename",
+        action="store_true",
+        help="Prefer metadata from filenames over embedded tags when generating YAML (non-interactive mode)",
+    )
+
     args = parser.parse_args()
 
-    tagger = Tagger(execute=args.execute, no_color=args.no_color)
+    tagger = Tagger(
+        execute=args.execute,
+        no_color=args.no_color,
+        prefer_filename=args.prefer_filename,
+    )
 
     if args.yaml_file:
         # Apply mode
@@ -1179,7 +1290,9 @@ Note:
         if os.path.exists("tagger.yaml") and not args.execute:
             tagger.show_diff("tagger.yaml")
         else:
-            tagger.generate_yaml(args.output)
+            # If --prefer-filename is set, skip interactive mode
+            interactive = not args.prefer_filename
+            tagger.generate_yaml(args.output, interactive=interactive)
 
 
 if __name__ == "__main__":
