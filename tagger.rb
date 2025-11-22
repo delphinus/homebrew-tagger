@@ -248,9 +248,10 @@ class Tagger < Formula
     # Create virtualenv
     venv = virtualenv_create(libexec, "python3.12")
 
-    # Install all wheel resources directly
+    # Install all resources - wheels will be installed directly, tarballs will be built
     resources.each do |r|
-      venv.pip_install r
+      # Install from URL directly to avoid --no-binary issues
+      venv.pip_install r.url
     end
 
     # Install the main package
