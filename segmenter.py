@@ -13,7 +13,8 @@ from typing import List, Optional, Tuple
 
 # Workaround for numba importing coverage module which conflicts with pytest-cov
 # Must be set before numba is imported (which happens when librosa is imported)
-if "_pytest.config" in sys.modules:
+# Check if we're running under pytest by looking for pytest in sys.modules or PYTEST_CURRENT_TEST env var
+if any(key.startswith(("pytest", "_pytest")) for key in sys.modules.keys()) or "PYTEST_CURRENT_TEST" in os.environ:
     # Disable numba's coverage integration to prevent conflicts
     os.environ["NUMBA_DISABLE_JIT"] = "0"  # Keep JIT enabled
     os.environ["NUMBA_COVERAGE"] = "0"  # Disable coverage integration
