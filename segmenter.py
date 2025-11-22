@@ -6,9 +6,20 @@ Analyzes DJ mixes to detect track boundaries using audio feature analysis.
 Outputs CUE sheets compatible with mp3DirectCut.
 """
 
+import os
 import sys
 from pathlib import Path
 from typing import List, Optional, Tuple
+
+# Enable parallel processing for numerical libraries
+# This significantly speeds up similarity matrix computation
+import multiprocessing
+
+cpu_count = multiprocessing.cpu_count()
+os.environ.setdefault("OMP_NUM_THREADS", str(cpu_count))
+os.environ.setdefault("MKL_NUM_THREADS", str(cpu_count))
+os.environ.setdefault("OPENBLAS_NUM_THREADS", str(cpu_count))
+os.environ.setdefault("NUMEXPR_NUM_THREADS", str(cpu_count))
 
 try:
     import librosa
