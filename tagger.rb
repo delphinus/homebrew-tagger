@@ -69,14 +69,14 @@ class Tagger < Formula
       venv.pip_install r.url
     end
 
+    # Install Python modules to the virtualenv's site-packages
+    venv.pip_install_and_link buildpath
+
     # Rewrite shebang in tagger script to use virtualenv python
     inreplace "tagger", %r{^#!/usr/bin/env python3$}, "#!#{libexec}/bin/python"
 
     # Install tagger script
     bin.install "tagger"
-
-    # Install segmenter module to the virtualenv
-    venv.pip_install_and_link buildpath/"segmenter.py"
   end
 
   test do
