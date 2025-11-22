@@ -11,6 +11,7 @@ class Tagger < Formula
   license "MIT"
 
   depends_on "ffmpeg"
+  depends_on "libsndfile"
   depends_on "python@3.12"
 
   # Optional dependencies for DJ mix segmentation feature
