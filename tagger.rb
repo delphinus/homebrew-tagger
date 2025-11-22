@@ -3,12 +3,15 @@ class Tagger < Formula
 
   desc "Audio file tag and filename manager using mutagen"
   homepage "https://github.com/delphinus/homebrew-tagger"
-  url "https://github.com/delphinus/homebrew-tagger/archive/refs/tags/v1.8.1.tar.gz"
-  sha256 "4d0be1b5f3d2e4a442ad5fdc6e99eba22703c73a3027a6a81470e1d8364dd65b"
+  url "https://github.com/delphinus/homebrew-tagger/archive/refs/tags/v1.9.0.tar.gz"
+  sha256 "PLACEHOLDER_SHA256"
   license "MIT"
 
   depends_on "python@3.12"
   depends_on "ffmpeg"
+
+  # Optional dependencies for DJ mix segmentation feature
+  # Users can install these manually with: pip install librosa numpy
 
   # Skip relocation of pydantic_core binary (wheel has insufficient header padding)
   skip_clean "libexec"
@@ -65,6 +68,9 @@ class Tagger < Formula
     resources.each do |r|
       venv.pip_install r.url
     end
+
+    # Install Python modules to the virtualenv's site-packages
+    venv.pip_install_and_link buildpath
 
     # Rewrite shebang in tagger script to use virtualenv python
     inreplace "tagger", %r{^#!/usr/bin/env python3$}, "#!#{libexec}/bin/python"

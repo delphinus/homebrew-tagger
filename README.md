@@ -11,6 +11,7 @@ Audio file tag and filename manager using [mutagen](https://mutagen.readthedocs.
 - Automatically rename files based on tags
 - Generate YAML from existing audio files
 - Dry-run mode by default to preview changes
+- **NEW:** DJ mix segmentation - automatically detect track boundaries and generate CUE sheets
 
 ## Installation
 
@@ -51,10 +52,32 @@ ln -s $(pwd)/tagger /usr/local/bin/tagger
 
 ## Requirements
 
-- Python 3.9 or later
+- Python 3.10 or later
 - [mutagen](https://mutagen.readthedocs.io/) (automatically installed)
 - [PyYAML](https://pyyaml.org/) (automatically installed)
+- [pydantic](https://docs.pydantic.dev/) (automatically installed)
 - [ffmpeg](https://ffmpeg.org/) (optional, required for .aac to .m4a conversion)
+
+### Optional: DJ Mix Segmentation
+
+For DJ mix segmentation features, install additional dependencies:
+
+```bash
+pip install librosa numpy pyperclip requests beautifulsoup4
+```
+
+Or install the segmentation extras:
+
+```bash
+pip install -e ".[segmentation]"
+```
+
+With Homebrew, these can be installed separately:
+
+```bash
+# After installing tagger via Homebrew
+pip3 install librosa numpy pyperclip requests beautifulsoup4
+```
 
 ## Usage
 
@@ -259,10 +282,184 @@ Invalid filename characters (`<>:"/\|?*`) are replaced with underscores.
 - Compilation (cpil)
 - Artwork (covr)
 
+## DJ Mix Segmentation
+
+Tagger can automatically analyze DJ mixes and detect track boundaries using audio feature analysis. This is useful for splitting long DJ sets into individual tracks.
+
+### How It Works
+
+The segmentation algorithm analyzes:
+- **Spectral features**: Changes in frequency distribution
+- **Chroma features**: Key and tonality changes
+- **Timbral features**: Changes in sound texture (MFCC)
+
+It detects transition points where these features change significantly, indicating a new track.
+
+### Basic Usage
+
+```bash
+# Analyze a DJ mix and generate a CUE sheet
+tagger --segment mix.mp3
+
+# Specify output file
+tagger --segment mix.mp3 -o custom.cue
+
+# Adjust sensitivity (0.0-1.0, default 0.5)
+# Higher = more sensitive = more boundaries detected
+tagger --segment mix.mp3 --sensitivity 0.7
+
+# Lower sensitivity = fewer boundaries
+tagger --segment mix.mp3 --sensitivity 0.3
+```
+
+### Using Tracklists
+
+Tracklists significantly improve segmentation accuracy by:
+- Providing the exact number of tracks (constraint for boundary detection)
+- Including track names and artists in the CUE sheet
+- Using timestamps if available (skips detection entirely)
+
+#### From Clipboard
+
+Copy the tracklist to your clipboard, then:
+
+```bash
+tagger --segment mix.mp3 --tracklist-clipboard
+```
+
+#### From a File
+
+Save the tracklist to a text file:
+
+```bash
+tagger --segment mix.mp3 --tracklist-file tracklist.txt
+```
+
+#### From SoundCloud URL
+
+Extract tracklist directly from a SoundCloud page:
+
+```bash
+tagger --segment mix.mp3 --tracklist "https://soundcloud.com/user/track"
+```
+
+#### Tracklist Formats
+
+The parser supports various formats:
+
+```
+1. Artist - Title
+2. Another Artist - Another Title [5:30]
+3. Third Artist - Third Title
+
+01 Artist - Title
+02 Artist - Title
+
+Artist - Title
+Another Artist - Another Title
+
+1. Title Only
+2. Another Title
+```
+
+If timestamps are provided (e.g., `[5:30]`), they will be used directly instead of audio analysis.
+
+### Output Format
+
+The tool generates a CUE sheet compatible with mp3DirectCut and other audio tools.
+
+Without tracklist:
+
+```cue
+FILE "mix.mp3" MP3
+  TRACK 01 AUDIO
+    TITLE "Track 01"
+    INDEX 01 00:00:00
+  TRACK 02 AUDIO
+    TITLE "Track 02"
+    INDEX 01 03:45:23
+  TRACK 03 AUDIO
+    TITLE "Track 03"
+    INDEX 01 07:12:51
+```
+
+With tracklist:
+
+```cue
+FILE "mix.mp3" MP3
+  TRACK 01 AUDIO
+    PERFORMER "Fracus & Darwin"
+    TITLE "Groove Control"
+    INDEX 01 00:00:00
+  TRACK 02 AUDIO
+    PERFORMER "Stompy & Flyin'"
+    TITLE "Come Follow Me (DJ Storm & Bananaman Remix)"
+    INDEX 01 03:45:23
+  TRACK 03 AUDIO
+    PERFORMER "J.D.S."
+    TITLE "Higher Love (Fracus & Darwin's Electrified Mix)"
+    INDEX 01 07:12:51
+```
+
+### Notes
+
+- Works best with **non-stop mixes** where tracks blend together
+- Designed for electronic music (Trance, House, Techno, Hardcore, etc.)
+- **Not based on silence detection** - uses musical feature analysis
+- Results are **candidate boundaries** - manual verification recommended
+- Minimum 60 seconds between detected boundaries to avoid false positives
+- Adjust `--sensitivity` based on your mix:
+  - Tracks with **clear transitions**: use lower sensitivity (0.3-0.4)
+  - **Heavily blended mixes**: use higher sensitivity (0.6-0.8)
+
+### Example Workflows
+
+#### Workflow 1: With Tracklist from SoundCloud
+
+1. Find your mix on SoundCloud (e.g., https://soundcloud.com/alstorm/happy-hardcore-mix)
+
+2. Generate CUE sheet with tracklist:
+   ```bash
+   tagger --segment "Happy Hardcore Mix.mp3" \
+          --tracklist "https://soundcloud.com/alstorm/happy-hardcore-mix" \
+          --sensitivity 0.6
+   ```
+
+3. Open the mix in mp3DirectCut
+
+4. Load the generated CUE sheet (File → Open CUE sheet)
+
+5. Review the detected boundaries and adjust as needed
+
+6. Split the mix - track names are already filled in!
+
+#### Workflow 2: With Tracklist from Clipboard
+
+1. Copy tracklist from mix description (on SoundCloud, Mixcloud, etc.)
+
+2. Generate CUE sheet:
+   ```bash
+   tagger --segment "DJ Mix.mp3" --tracklist-clipboard
+   ```
+
+3. Open in mp3DirectCut and split
+
+#### Workflow 3: Without Tracklist
+
+1. Generate CUE sheet with audio analysis only:
+   ```bash
+   tagger --segment "DJ Mix.mp3" --sensitivity 0.5
+   ```
+
+2. Open in mp3DirectCut, review, and manually add track names
+
 ## Command-line Options
 
 ```
-usage: tagger [-h] [-e] [-o OUTPUT] [yaml_file]
+usage: tagger [-h] [-e] [-o OUTPUT] [--segment AUDIO_FILE] [--sensitivity SENSITIVITY]
+              [--tracklist TRACKLIST] [--tracklist-file TRACKLIST_FILE]
+              [--tracklist-clipboard] [--no-color] [--prefer-filename] [-v]
+              [yaml_file]
 
 Manage audio file tags and filenames using mutagen
 
@@ -276,6 +473,19 @@ optional arguments:
   -o OUTPUT, --output OUTPUT
                         Output YAML file name when generating (default:
                         tagger.yaml)
+  --segment AUDIO_FILE  Segment a DJ mix and generate CUE sheet
+  --sensitivity SENSITIVITY
+                        Detection sensitivity for DJ mix segmentation
+                        (0.0-1.0, default: 0.5)
+  --tracklist TRACKLIST
+                        Tracklist source: 'clipboard', file path, or SoundCloud URL
+  --tracklist-file TRACKLIST_FILE
+                        Read tracklist from a text file
+  --tracklist-clipboard
+                        Read tracklist from clipboard
+  --no-color            Disable colored output
+  --prefer-filename     Prefer metadata from filenames over embedded tags
+  -v, --version         Show version number
 ```
 
 ## License

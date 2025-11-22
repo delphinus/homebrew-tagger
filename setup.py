@@ -10,13 +10,13 @@ with open("README.md", "r", encoding="utf-8") as f:
 
 setup(
     name="tagger",
-    version="1.8.1",
+    version="1.9.0",
     description="Audio file tag and filename manager using mutagen",
     long_description=long_description,
     long_description_content_type="text/markdown",
     author="delphinus",
     url="https://github.com/delphinus/tagger",
-    py_modules=[],
+    py_modules=["segmenter", "tracklist_parser"],
     scripts=["tagger"],
     install_requires=[
         "mutagen>=1.45.0",
@@ -24,6 +24,13 @@ setup(
         "pydantic>=2.0.0",
     ],
     extras_require={
+        "segmentation": [
+            "librosa>=0.10.0",
+            "numpy>=1.24.0",
+            "pyperclip>=1.8.0",  # For clipboard support
+            "requests>=2.31.0",  # For SoundCloud URL fetching
+            "beautifulsoup4>=4.12.0",  # For HTML parsing
+        ],
         "test": [
             "pytest>=7.0.0",
             "pytest-cov>=4.0.0",

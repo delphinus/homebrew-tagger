@@ -6,7 +6,7 @@ This script manages tags and filenames for .mp3 and .m4a files.
 It can also convert .aac files to .m4a format (lossless container conversion).
 """
 
-__version__ = "1.8.1"
+__version__ = "1.9.0"
 
 import argparse
 import hashlib
@@ -1313,8 +1313,107 @@ Note:
         help="Prefer metadata from filenames over embedded tags when generating YAML (non-interactive mode)",
     )
 
+    parser.add_argument(
+        "--segment",
+        metavar="AUDIO_FILE",
+        help="Segment a DJ mix and generate CUE sheet (use with --sensitivity to adjust detection)",
+    )
+
+    parser.add_argument(
+        "--sensitivity",
+        type=float,
+        default=0.5,
+        help="Detection sensitivity for DJ mix segmentation (0.0-1.0, default: 0.5)",
+    )
+
+    parser.add_argument(
+        "--tracklist",
+        help="Tracklist source: 'clipboard', file path, or SoundCloud URL",
+    )
+
+    parser.add_argument(
+        "--tracklist-file",
+        help="Read tracklist from a text file",
+    )
+
+    parser.add_argument(
+        "--tracklist-clipboard",
+        action="store_true",
+        help="Read tracklist from clipboard",
+    )
+
     args = parser.parse_args()
 
+    # Segment mode (DJ mix analysis)
+    if args.segment:
+        try:
+            from segmenter import segment_mix
+            from tracklist_parser import TracklistParser
+        except ImportError as e:
+            print(
+                f"Error: Required module not available: {e}\n"
+                "Please install with: pip install librosa",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
+        # Validate sensitivity
+        if not 0.0 <= args.sensitivity <= 1.0:
+            print("Error: Sensitivity must be between 0.0 and 1.0", file=sys.stderr)
+            sys.exit(1)
+
+        # Parse tracklist if provided
+        tracklist = None
+        if args.tracklist_clipboard:
+            print("Reading tracklist from clipboard...", file=sys.stderr)
+            tracklist = TracklistParser.from_clipboard()
+            if tracklist:
+                print(f"Found {len(tracklist)} tracks in clipboard", file=sys.stderr)
+        elif args.tracklist_file:
+            print(f"Reading tracklist from {args.tracklist_file}...", file=sys.stderr)
+            tracklist = TracklistParser.from_file(args.tracklist_file)
+            if tracklist:
+                print(f"Found {len(tracklist)} tracks in file", file=sys.stderr)
+        elif args.tracklist:
+            # Auto-detect: clipboard, file, or URL
+            if args.tracklist.lower() == "clipboard":
+                tracklist = TracklistParser.from_clipboard()
+            elif args.tracklist.startswith("http"):
+                print(f"Extracting tracklist from {args.tracklist}...", file=sys.stderr)
+                tracklist = TracklistParser.from_soundcloud(args.tracklist)
+                if tracklist:
+                    print(f"Found {len(tracklist)} tracks from URL", file=sys.stderr)
+            else:
+                # Assume it's a file path
+                tracklist = TracklistParser.from_file(args.tracklist)
+                if tracklist:
+                    print(f"Found {len(tracklist)} tracks from file", file=sys.stderr)
+
+        if tracklist:
+            print("\nTracklist:", file=sys.stderr)
+            for track in tracklist[:5]:  # Show first 5 tracks
+                print(f"  {track}", file=sys.stderr)
+            if len(tracklist) > 5:
+                print(f"  ... and {len(tracklist) - 5} more", file=sys.stderr)
+            print()
+
+        # Determine output path
+        output_path = None
+        if args.output and args.output != "tagger.yaml":
+            output_path = args.output
+        else:
+            # Default: same as audio file with .cue extension
+            output_path = Path(args.segment).with_suffix(".cue")
+
+        try:
+            segment_mix(args.segment, str(output_path), args.sensitivity, tracklist)
+        except Exception as e:
+            print(f"Error: {e}", file=sys.stderr)
+            sys.exit(1)
+
+        sys.exit(0)
+
+    # Regular tagger mode
     tagger = Tagger(
         execute=args.execute,
         no_color=args.no_color,
