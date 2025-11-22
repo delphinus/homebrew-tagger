@@ -1,9 +1,15 @@
 """Pytest configuration and fixtures"""
 
+import os
 import sys
 from importlib.machinery import SourceFileLoader
 from importlib.util import module_from_spec, spec_from_loader
 from pathlib import Path
+
+# Prevent numba from importing coverage module which conflicts with pytest-cov
+# This must be set before segmenter.py is imported
+os.environ["NUMBA_DISABLE_JIT"] = "0"  # Keep JIT enabled
+os.environ["NUMBA_COVERAGE"] = "0"  # Disable coverage integration
 
 # Get the project root directory
 project_root = Path(__file__).parent.parent
