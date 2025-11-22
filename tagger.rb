@@ -67,6 +67,11 @@ class Tagger < Formula
       url "https://files.pythonhosted.org/packages/ff/1d/c945fea9d83ea1f2be9d116b3674dbaef26ed090374a77c394b31e3b083b/soxr-1.0.0-cp312-abi3-macosx_11_0_arm64.whl"
       sha256 "e973d487ee46aa8023ca00a139db6e09af053a37a032fe22f9ff0cc2e19c94b4"
     end
+
+    resource "msgpack" do
+      url "https://files.pythonhosted.org/packages/34/68/ba4f155f793a74c1483d4bdef136e1023f7bcba557f0db4ef3db3c665cf1/msgpack-1.1.2-cp312-cp312-macosx_11_0_arm64.whl"
+      sha256 "446abdd8b94b55c800ac34b102dffd2f6aa0ce643c55dfc017ad89347db3dbdb"
+    end
   end
 
   on_intel do
@@ -119,6 +124,11 @@ class Tagger < Formula
       url "https://files.pythonhosted.org/packages/c5/c7/f92b81f1a151c13afb114f57799b86da9330bec844ea5a0d3fe6a8732678/soxr-1.0.0-cp312-abi3-macosx_10_14_x86_64.whl"
       sha256 "abecf4e39017f3fadb5e051637c272ae5778d838e5c3926a35db36a53e3a607f"
     end
+
+    resource "msgpack" do
+      url "https://files.pythonhosted.org/packages/ad/bd/8b0d01c756203fbab65d265859749860682ccd2a59594609aeec3a144efa/msgpack-1.1.2-cp312-cp312-macosx_10_13_x86_64.whl"
+      sha256 "70a0dff9d1f8da25179ffcf880e10cf1aad55fdb63cd59c9a49a1b82290062aa"
+    end
   end
 
   skip_clean "libexec"
@@ -169,11 +179,6 @@ class Tagger < Formula
     sha256 "29572ef2b1f17581046b3a2227d5c611fb25ec70ca1ba8554b24b0e69331a484"
   end
 
-  resource "msgpack" do
-    url "https://files.pythonhosted.org/packages/a7/15/86f000ff0e2b71fcf49e5f93e70ac18f32f61a5f2df14ad9aa9bc0a092c6/msgpack-1.1.2-py3-none-any.whl"
-    sha256 "b26ad64bb1f7eaf0a2c293fe3ae0f24dddbe06a8d6d35e35e98447c6e8e90ec0"
-  end
-
   resource "pooch" do
     url "https://files.pythonhosted.org/packages/a8/87/77cc11c7a9ea9fd05503def69e3d18605852cd0d4b0d3b8f15bbeb3ef1d1/pooch-1.8.2-py3-none-any.whl"
     sha256 "3529a57096f7198778a5ceefd5ac3ef0e4d06a6ddaf9fc2d609b806f25302c47"
@@ -220,8 +225,8 @@ class Tagger < Formula
   end
 
   resource "pyperclip" do
-    url "https://files.pythonhosted.org/packages/1a/e6/205603f55a62e6c4b4bc56d40a29871144dcbe00fe7c2ee4aae6ec96f850/pyperclip-1.9.0-py3-none-any.whl"
-    sha256 "5b59fdd3c5f72c5ad1f9196f5dd47d0e69f7b95e133b585f74cb48ff747f012e"
+    url "https://files.pythonhosted.org/packages/30/23/2f0a3efc4d6a32f3b63cdff36cd398d9701d26cda58e3ab97ac79fb5e60d/pyperclip-1.9.0.tar.gz"
+    sha256 "b7de0142ddc81bfc5c7507eea19da920b92252b548b96186caf94a5e2527d310"
   end
 
   resource "soupsieve" do
