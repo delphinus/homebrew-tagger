@@ -11,6 +11,13 @@ import sys
 from pathlib import Path
 from typing import List, Optional, Tuple
 
+# Workaround for numba importing coverage module which conflicts with pytest-cov
+# Must be set before numba is imported (which happens when librosa is imported)
+if "_pytest.config" in sys.modules:
+    # Disable numba's coverage integration to prevent conflicts
+    os.environ["NUMBA_DISABLE_JIT"] = "0"  # Keep JIT enabled
+    os.environ["NUMBA_COVERAGE"] = "0"  # Disable coverage integration
+
 # Enable parallel processing for numerical libraries and scikit-learn
 # This significantly speeds up similarity matrix computation
 import multiprocessing
@@ -75,6 +82,9 @@ except ImportError:
             self.n += n
 
         def set_postfix(self, **kwargs):
+            pass
+
+        def set_postfix_str(self, s):
             pass
 
 # Monkey-patch sklearn.neighbors.NearestNeighbors to use all CPU cores
