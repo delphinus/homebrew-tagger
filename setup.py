@@ -10,7 +10,7 @@ with open("README.md", "r", encoding="utf-8") as f:
 
 setup(
     name="tagger",
-    version="1.9.3",
+    version="1.9.4",
     description="Audio file tag and filename manager using mutagen",
     long_description=long_description,
     long_description_content_type="text/markdown",
@@ -30,10 +30,12 @@ setup(
             "pyperclip>=1.8.0",  # For clipboard support
             "requests>=2.31.0",  # For SoundCloud URL fetching
             "beautifulsoup4>=4.12.0",  # For HTML parsing
+            "tqdm>=4.66.0",  # For progress bars
         ],
         "test": [
             "pytest>=7.0.0",
             "pytest-cov>=4.0.0",
+            "psutil>=5.9.0",
         ],
     },
     python_requires=">=3.10",

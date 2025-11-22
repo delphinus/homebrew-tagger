@@ -11,25 +11,86 @@ import sys
 from pathlib import Path
 from typing import List, Optional, Tuple
 
-# Enable parallel processing for numerical libraries
+# Enable parallel processing for numerical libraries and scikit-learn
 # This significantly speeds up similarity matrix computation
 import multiprocessing
 
 cpu_count = multiprocessing.cpu_count()
+# Apple Accelerate (used by numpy/scipy on macOS)
+os.environ.setdefault("VECLIB_MAXIMUM_THREADS", str(cpu_count))
+# OpenBLAS/MKL (used on Linux/other platforms)
 os.environ.setdefault("OMP_NUM_THREADS", str(cpu_count))
 os.environ.setdefault("MKL_NUM_THREADS", str(cpu_count))
 os.environ.setdefault("OPENBLAS_NUM_THREADS", str(cpu_count))
 os.environ.setdefault("NUMEXPR_NUM_THREADS", str(cpu_count))
+# joblib/scikit-learn parallelization (used by librosa's recurrence_matrix)
+os.environ.setdefault("LOKY_MAX_CPU_COUNT", str(cpu_count))
+
+# Also set threadpoolctl to use all cores
+try:
+    import threadpoolctl
+    # This will affect BLAS/LAPACK libraries after they're loaded
+    threadpoolctl.threadpool_limits(limits=cpu_count)
+except ImportError:
+    pass
 
 try:
     import librosa
     import numpy as np
+    import sklearn.neighbors
 except ImportError:
     print(
         "Error: librosa is not installed. Please install it with: pip install librosa",
         file=sys.stderr,
     )
     sys.exit(1)
+
+try:
+    from tqdm import tqdm
+    TQDM_AVAILABLE = True
+except ImportError:
+    TQDM_AVAILABLE = False
+    # Fallback: simple progress indicator
+    class tqdm:
+        def __init__(self, iterable=None, desc=None, total=None, disable=False, **kwargs):
+            self.iterable = iterable
+            self.desc = desc
+            self.total = total
+            self.disable = disable
+            self.n = 0
+            if desc and not disable:
+                print(f"{desc}...", file=sys.stderr, flush=True)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            if not self.disable:
+                print(" Done.", file=sys.stderr, flush=True)
+
+        def __iter__(self):
+            return iter(self.iterable)
+
+        def update(self, n=1):
+            self.n += n
+
+        def set_postfix(self, **kwargs):
+            pass
+
+# Monkey-patch sklearn.neighbors.NearestNeighbors to use all CPU cores
+# This makes librosa's recurrence_matrix use parallel processing
+_original_nn_init = sklearn.neighbors.NearestNeighbors.__init__
+
+
+def _parallel_nn_init(self, n_neighbors=5, *, radius=1.0, algorithm="auto", leaf_size=30, metric="minkowski", p=2, metric_params=None, n_jobs=None, **kwargs):
+    """Patched __init__ that defaults n_jobs to all CPU cores"""
+    if n_jobs is None:
+        n_jobs = cpu_count
+    _original_nn_init(self, n_neighbors=n_neighbors, radius=radius, algorithm=algorithm, leaf_size=leaf_size, metric=metric, p=p, metric_params=metric_params, n_jobs=n_jobs, **kwargs)
+
+
+# Replace the __init__ method
+sklearn.neighbors.NearestNeighbors.__init__ = _parallel_nn_init
 
 try:
     from tracklist_parser import Track
@@ -99,38 +160,43 @@ class DJMixSegmenter:
         Returns:
             List of boundary timestamps in seconds
         """
-        print("Analyzing audio features...", file=sys.stderr)
-
-        # 1. Spectral contrast - detects changes in frequency balance
-        contrast = librosa.feature.spectral_contrast(
-            y=y, sr=sr, hop_length=self.hop_length, n_bands=6
-        )
-        contrast_mean = np.mean(contrast, axis=0)
-
-        # 2. Chroma features - detects key/tonality changes
-        chroma = librosa.feature.chroma_cqt(y=y, sr=sr, hop_length=self.hop_length)
-
-        # 3. MFCC - detects timbral changes
-        mfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=13, hop_length=self.hop_length)
-
-        # Compute self-similarity matrix for chroma
-        print("Computing similarity matrices...", file=sys.stderr)
-        chroma_similarity = librosa.segment.recurrence_matrix(
-            chroma, mode="affinity", metric="cosine", width=9
-        )
-
-        # Compute novelty curve from similarity matrix
-        novelty = np.sqrt(
-            librosa.segment.lag_to_recurrence(1 - chroma_similarity, axis=1).sum(
-                axis=0
+        with tqdm(total=5, desc="Analyzing audio", disable=False, file=sys.stderr) as pbar:
+            # 1. Spectral contrast - detects changes in frequency balance
+            pbar.set_postfix_str("extracting spectral contrast")
+            contrast = librosa.feature.spectral_contrast(
+                y=y, sr=sr, hop_length=self.hop_length, n_bands=6
             )
-        )
+            contrast_mean = np.mean(contrast, axis=0)
+            pbar.update(1)
 
-        # Normalize novelty curve
-        novelty = (novelty - novelty.min()) / (novelty.max() - novelty.min() + 1e-8)
+            # 2. Chroma features - detects key/tonality changes
+            pbar.set_postfix_str("extracting chroma features")
+            chroma = librosa.feature.chroma_cqt(y=y, sr=sr, hop_length=self.hop_length)
+            pbar.update(1)
 
-        # Detect peaks in novelty curve
-        print("Detecting boundaries...", file=sys.stderr)
+            # 3. MFCC - detects timbral changes
+            pbar.set_postfix_str("extracting MFCC")
+            mfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=13, hop_length=self.hop_length)
+            pbar.update(1)
+
+            # Compute self-similarity matrix for chroma
+            pbar.set_postfix_str("computing similarity matrix")
+            chroma_similarity = librosa.segment.recurrence_matrix(
+                chroma, mode="affinity", metric="cosine", width=9
+            )
+            pbar.update(1)
+
+            # Compute novelty curve from similarity matrix
+            pbar.set_postfix_str("detecting boundaries")
+            novelty = np.sqrt(
+                librosa.segment.lag_to_recurrence(1 - chroma_similarity, axis=1).sum(
+                    axis=0
+                )
+            )
+
+            # Normalize novelty curve
+            novelty = (novelty - novelty.min()) / (novelty.max() - novelty.min() + 1e-8)
+            pbar.update(1)
 
         # Adjust threshold based on sensitivity
         # Lower sensitivity = higher threshold = fewer boundaries
