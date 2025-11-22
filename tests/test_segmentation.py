@@ -3,16 +3,17 @@ Tests for DJ mix segmentation functionality
 """
 
 import pytest
-import numpy as np
 from pathlib import Path
 
 try:
+    import numpy as np
     import librosa
     from segmenter import DJMixSegmenter, CueSheetGenerator, segment_mix
 
     LIBROSA_AVAILABLE = True
 except ImportError:
     LIBROSA_AVAILABLE = False
+    np = None  # For type hints
 
 
 @pytest.mark.skipif(not LIBROSA_AVAILABLE, reason="librosa not installed")
