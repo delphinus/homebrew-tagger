@@ -54,10 +54,6 @@ class Tagger < Formula
       sha256 "1a53f4b74ee9fd30cb3d27d904dadece67a7575198bd80e687ee76474620735f"
     end
 
-    resource "soundfile" do
-      url "https://files.pythonhosted.org/packages/a0/e5/58fd1a8d7b26fc113af244f966ee3aecf03cb9293cb935daaddc1e455e18/soundfile-0.13.1-py2.py3-none-macosx_11_0_arm64.whl"
-      sha256 "743f12c12c4054921e15736c6be09ac26b3b3d603aef6fd69f9dde68748f2593"
-    end
 
     resource "cffi" do
       url "https://files.pythonhosted.org/packages/df/a2/781b623f57358e360d62cdd7a8c681f074a71d445418a776eef0aadb4ab4/cffi-2.0.0-cp312-cp312-macosx_11_0_arm64.whl"
@@ -111,10 +107,6 @@ class Tagger < Formula
       sha256 "28e763aba92fe9c72296911e040231d486447c01d4f90027c8e893d89d49b20e"
     end
 
-    resource "soundfile" do
-      url "https://files.pythonhosted.org/packages/ea/ab/73e97a5b3cc46bba7ff8650a1504348fa1863a6f9d57d7001c6b67c5f20e/soundfile-0.13.1-py2.py3-none-macosx_10_9_x86_64.whl"
-      sha256 "82dc664d19831933fe59adad199bf3945ad06d84bc111a5b4c0d3089a5b9ec33"
-    end
 
     resource "cffi" do
       url "https://files.pythonhosted.org/packages/ea/47/4f61023ea636104d4f16ab488e268b93008c3d0bb76893b1b31db1f96802/cffi-2.0.0-cp312-cp312-macosx_10_13_x86_64.whl"
@@ -243,6 +235,16 @@ class Tagger < Formula
   resource "librosa" do
     url "https://files.pythonhosted.org/packages/b5/ba/c63c5786dfee4c3417094c4b00966e61e4a63efecee22cb7b4c0387dda83/librosa-0.11.0-py3-none-any.whl"
     sha256 "0b6415c4fd68bff4c29288abe67c6d80b587e0e1e2cfb0aad23e4559504a7fa1"
+  end
+
+  resource "soundfile" do
+    url "https://files.pythonhosted.org/packages/e1/41/9b873a8c055582859b239be17902a85339bec6a30ad162f98c9b0288a2cc/soundfile-0.13.1.tar.gz"
+    sha256 "b2c68dab1e30297317080a5b43df57e302584c49e2942defdde0acccc53f0e5b"
+  end
+
+  resource "tqdm" do
+    url "https://files.pythonhosted.org/packages/d0/30/dc54f88dd4a2b5dc8a0279bdd7270e735851848b762aeb1c1184ed1f6b14/tqdm-4.67.1-py3-none-any.whl"
+    sha256 "26445eca388f82e72884e0d580d5464cd801a3ea01e63e5601bdff9ba6a48de2"
   end
 
   def install
