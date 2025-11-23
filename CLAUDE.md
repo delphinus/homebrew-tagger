@@ -119,6 +119,7 @@ Files that must have matching versions:
 ### Forbidden Practices
 
 ❌ **NEVER do these:**
+- **Delete Git tags** (once pushed, tags are immutable - create new versions instead)
 - Use pre-release suffixes in production tags (`v1.12.0-pr34`, `v1.12.0-beta`)
 - Create tags that don't match code version
 - Skip Homebrew formula updates
