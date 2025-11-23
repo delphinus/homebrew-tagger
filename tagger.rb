@@ -6,8 +6,8 @@ class Tagger < Formula
 
   desc "Audio file tag and filename manager using mutagen"
   homepage "https://github.com/delphinus/homebrew-tagger"
-  url "https://github.com/delphinus/homebrew-tagger/archive/refs/tags/v1.14.0.tar.gz"
-  sha256 "bf06e691752b5a093f9c0a9005f6b9888c0445cb7ec923342900e98f233a4cc4"
+  url "https://github.com/delphinus/homebrew-tagger/archive/refs/tags/v1.15.0.tar.gz"
+  sha256 "79ddf848de39f1d139b230d386fcf90ae5cf9de40f3d31470d7e60fc15434c45"
   license "MIT"
 
   depends_on "ffmpeg"
@@ -247,6 +247,16 @@ class Tagger < Formula
     sha256 "26445eca388f82e72884e0d580d5464cd801a3ea01e63e5601bdff9ba6a48de2"
   end
 
+  resource "pyacoustid" do
+    url "https://files.pythonhosted.org/packages/1e/c7/48a17b6a75888cf760a95f677cec5fe68fd00edf9072df14071008d9b2c0/pyacoustid-1.3.0.tar.gz"
+    sha256 "5f4f487191c19ebb908270b1b7b5297f132da332b1568b96a914574c079ed177"
+  end
+
+  resource "shazamio" do
+    url "https://files.pythonhosted.org/packages/05/b6/d7881361b565bc4736916532fcaf58e91eae8db338b2869b50636fbd8602/shazamio-0.8.1-py3-none-any.whl"
+    sha256 "ac4823dc9a8abd0b57455a3b29340c1fc090286bab0d8cc06eb862d7626691d0"
+  end
+
   def install
     # Create virtualenv
     venv = virtualenv_create(libexec, "python3.12")
@@ -262,6 +272,32 @@ class Tagger < Formula
   end
 
   test do
+    # Test basic functionality
     system bin/"tagger", "--help"
+    system bin/"tagger", "--version"
+
+    # Test DJ mix segmentation with a generated audio file
+    # Generate a 30-second test audio file (sine wave at 440Hz)
+    system "ffmpeg", "-f", "lavfi", "-i", "sine=frequency=440:duration=30",
+           "-ar", "44100", "-ac", "2", "-y", "test_mix.mp3"
+
+    # Test --segment without recognition (should work without pyacoustid)
+    system bin/"tagger", "--segment", "test_mix.mp3", "-o", "test.cue"
+    assert_predicate testpath/"test.cue", :exist?, "CUE file should be created"
+
+    # Verify CUE file contains required headers
+    cue_content = (testpath/"test.cue").read
+    assert_match(/FILE "test_mix/, cue_content, "CUE file should reference the audio file")
+    assert_match(/TRACK 01 AUDIO/, cue_content, "CUE file should contain at least one track")
+
+    # Test that all segmentation dependencies are available
+    # This verifies librosa, numpy, scipy, etc. are properly installed
+    system libexec/"bin/python", "-c", "import librosa; import numpy; import scipy; " \
+           "print('Segmentation dependencies OK')"
+
+    # Test music recognition dependencies (pyacoustid)
+    # Should be installed as part of segmentation extras
+    system libexec/"bin/python", "-c", "import acoustid; " \
+           "print('Music recognition available')"
   end
 end
