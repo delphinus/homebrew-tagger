@@ -6,7 +6,7 @@ This script manages tags and filenames for .mp3 and .m4a files.
 It can also convert .aac files to .m4a format (lossless container conversion).
 """
 
-__version__ = "1.11.1"
+__version__ = "1.11.2"
 
 import argparse
 import hashlib
