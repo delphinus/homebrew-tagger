@@ -376,25 +376,28 @@ class DJMixSegmenter:
                 pbar.set_postfix_str(f"chunk {i+1}/{total_chunks}")
 
                 # Extract chroma for this chunk
-                chroma = librosa.feature.chroma_cqt(y=chunk, sr=sr, hop_length=self.hop_length)
+                with Spinner(f"Extracting chroma features (chunk {i+1}/{total_chunks})"):
+                    chroma = librosa.feature.chroma_cqt(y=chunk, sr=sr, hop_length=self.hop_length)
 
                 # Compute similarity matrix for this chunk
                 # Use sparse matrix with limited k-neighbors to reduce memory usage
-                chroma_similarity = librosa.segment.recurrence_matrix(
-                    chroma, k=100, mode="affinity", metric="cosine", width=9, sparse=True
-                )
+                with Spinner(f"Computing similarity matrix (chunk {i+1}/{total_chunks})"):
+                    chroma_similarity = librosa.segment.recurrence_matrix(
+                        chroma, k=100, mode="affinity", metric="cosine", width=9, sparse=True
+                    )
 
                 # Compute novelty curve
                 # Use sparse-friendly novelty computation
-                if hasattr(chroma_similarity, 'toarray'):
-                    # Sparse matrix: compute novelty without full dense conversion
-                    # Compute novelty as the negative sum of similarities (lower similarity = higher novelty)
-                    novelty_chunk = -np.asarray(chroma_similarity.sum(axis=0)).flatten()
-                else:
-                    # Dense matrix
-                    novelty_chunk = np.sqrt(
-                        librosa.segment.lag_to_recurrence(1 - chroma_similarity, axis=1).sum(axis=0)
-                    )
+                with Spinner(f"Computing novelty curve (chunk {i+1}/{total_chunks})"):
+                    if hasattr(chroma_similarity, 'toarray'):
+                        # Sparse matrix: compute novelty without full dense conversion
+                        # Compute novelty as the negative sum of similarities (lower similarity = higher novelty)
+                        novelty_chunk = -np.asarray(chroma_similarity.sum(axis=0)).flatten()
+                    else:
+                        # Dense matrix
+                        novelty_chunk = np.sqrt(
+                            librosa.segment.lag_to_recurrence(1 - chroma_similarity, axis=1).sum(axis=0)
+                        )
 
                 # Store novelty values with global time offset
                 all_novelty.append((start_idx, novelty_chunk))
