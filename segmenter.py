@@ -135,11 +135,11 @@ class DJMixSegmenter:
         """
         try:
             import warnings
-            # Suppress librosa warnings about PySoundFile fallback to audioread
-            # This is expected behavior for certain formats (e.g., m4a)
+            # Suppress all warnings from librosa and soundfile about format conversion
+            # This is expected behavior for certain formats (e.g., m4a) and doesn't affect functionality
             with warnings.catch_warnings():
-                warnings.filterwarnings("ignore", category=UserWarning, module="librosa")
-                warnings.filterwarnings("ignore", category=FutureWarning, module="librosa")
+                warnings.filterwarnings("ignore", category=UserWarning)
+                warnings.filterwarnings("ignore", category=FutureWarning)
                 y, sr = librosa.load(filepath, sr=None, mono=True)
 
             # Show a user-friendly message for formats that use audioread
