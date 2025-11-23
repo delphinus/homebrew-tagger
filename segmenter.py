@@ -206,55 +206,56 @@ class DJMixSegmenter:
         expected_count: Optional[int] = None,
     ) -> List[float]:
         """Process entire audio file at once (for smaller files)."""
-        with tqdm(total=5, desc="Analyzing audio", disable=False, file=sys.stderr) as pbar:
-            # 1. Spectral contrast - detects changes in frequency balance
-            pbar.set_postfix_str("extracting spectral contrast")
-            contrast = librosa.feature.spectral_contrast(
-                y=y, sr=sr, hop_length=self.hop_length, n_bands=6
-            )
-            contrast_mean = np.mean(contrast, axis=0)
-            pbar.update(1)
+        print("Analyzing audio features:", file=sys.stderr)
 
-            # 2. Chroma features - detects key/tonality changes
-            pbar.set_postfix_str("extracting chroma features")
-            chroma = librosa.feature.chroma_cqt(y=y, sr=sr, hop_length=self.hop_length)
-            pbar.update(1)
+        # 1. Spectral contrast - detects changes in frequency balance
+        print("  [1/5] Extracting spectral contrast...", end="", flush=True, file=sys.stderr)
+        contrast = librosa.feature.spectral_contrast(
+            y=y, sr=sr, hop_length=self.hop_length, n_bands=6
+        )
+        contrast_mean = np.mean(contrast, axis=0)
+        print(" ✓", file=sys.stderr)
 
-            # 3. MFCC - detects timbral changes
-            pbar.set_postfix_str("extracting MFCC")
-            mfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=13, hop_length=self.hop_length)
-            pbar.update(1)
+        # 2. Chroma features - detects key/tonality changes
+        print("  [2/5] Extracting chroma features...", end="", flush=True, file=sys.stderr)
+        chroma = librosa.feature.chroma_cqt(y=y, sr=sr, hop_length=self.hop_length)
+        print(" ✓", file=sys.stderr)
 
-            # Compute self-similarity matrix for chroma
-            pbar.set_postfix_str("computing similarity matrix")
-            # Use sparse matrix with limited k-neighbors to reduce memory usage
-            # k should be small enough to avoid memory issues but large enough for detection
-            chroma_similarity = librosa.segment.recurrence_matrix(
-                chroma, k=100, mode="affinity", metric="cosine", width=9, sparse=True
-            )
-            pbar.update(1)
+        # 3. MFCC - detects timbral changes
+        print("  [3/5] Extracting MFCC...", end="", flush=True, file=sys.stderr)
+        mfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=13, hop_length=self.hop_length)
+        print(" ✓", file=sys.stderr)
 
-            # Compute novelty curve from similarity matrix
-            pbar.set_postfix_str("detecting boundaries")
-            # Use sparse-friendly novelty computation
-            # For sparse matrices, compute novelty as sum of dissimilarities
-            if hasattr(chroma_similarity, 'toarray'):
-                # Sparse matrix: compute novelty without full dense conversion
-                # For affinity matrices (values 0-1), dissimilarity = max_value - similarity
-                # Since sparse matrices store only non-zero values, we need a different approach
-                # Compute novelty as the negative sum of similarities (lower similarity = higher novelty)
-                novelty = -np.asarray(chroma_similarity.sum(axis=0)).flatten()
-            else:
-                # Dense matrix (small files)
-                novelty = np.sqrt(
-                    librosa.segment.lag_to_recurrence(1 - chroma_similarity, axis=1).sum(
-                        axis=0
-                    )
+        # Compute self-similarity matrix for chroma
+        print("  [4/5] Computing similarity matrix...", end="", flush=True, file=sys.stderr)
+        # Use sparse matrix with limited k-neighbors to reduce memory usage
+        # k should be small enough to avoid memory issues but large enough for detection
+        chroma_similarity = librosa.segment.recurrence_matrix(
+            chroma, k=100, mode="affinity", metric="cosine", width=9, sparse=True
+        )
+        print(" ✓", file=sys.stderr)
+
+        # Compute novelty curve from similarity matrix
+        print("  [5/5] Detecting boundaries...", end="", flush=True, file=sys.stderr)
+        # Use sparse-friendly novelty computation
+        # For sparse matrices, compute novelty as sum of dissimilarities
+        if hasattr(chroma_similarity, 'toarray'):
+            # Sparse matrix: compute novelty without full dense conversion
+            # For affinity matrices (values 0-1), dissimilarity = max_value - similarity
+            # Since sparse matrices store only non-zero values, we need a different approach
+            # Compute novelty as the negative sum of similarities (lower similarity = higher novelty)
+            novelty = -np.asarray(chroma_similarity.sum(axis=0)).flatten()
+        else:
+            # Dense matrix (small files)
+            novelty = np.sqrt(
+                librosa.segment.lag_to_recurrence(1 - chroma_similarity, axis=1).sum(
+                    axis=0
                 )
+            )
 
-            # Normalize novelty curve
-            novelty = (novelty - novelty.min()) / (novelty.max() - novelty.min() + 1e-8)
-            pbar.update(1)
+        # Normalize novelty curve
+        novelty = (novelty - novelty.min()) / (novelty.max() - novelty.min() + 1e-8)
+        print(" ✓", file=sys.stderr)
 
         return self._find_peaks(novelty, sr, sensitivity, expected_count)
 
