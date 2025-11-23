@@ -1346,12 +1346,40 @@ Note:
 
     # Segment mode (DJ mix analysis)
     if args.segment:
+        # Show loading indicator while importing heavy libraries
+        import threading
+        import time
+
+        loading_done = threading.Event()
+        spinner_chars = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+
+        def show_spinner():
+            i = 0
+            while not loading_done.is_set():
+                print(
+                    f"\r{spinner_chars[i % len(spinner_chars)]} Loading audio processing libraries...",
+                    end="",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                i += 1
+                time.sleep(0.1)
+            print("\r✓ Libraries loaded" + " " * 30, file=sys.stderr, flush=True)
+
+        spinner_thread = threading.Thread(target=show_spinner, daemon=True)
+        spinner_thread.start()
+
         try:
             from segmenter import segment_mix
             from tracklist_parser import TracklistParser
+
+            loading_done.set()
+            spinner_thread.join(timeout=0.5)
         except ImportError as e:
+            loading_done.set()
+            spinner_thread.join(timeout=0.5)
             print(
-                f"Error: Required module not available: {e}\n"
+                f"\nError: Required module not available: {e}\n"
                 "Please install with: pip install librosa",
                 file=sys.stderr,
             )
