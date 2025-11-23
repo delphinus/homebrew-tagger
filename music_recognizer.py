@@ -44,16 +44,26 @@ class RecognitionResult:
 class MusicRecognizer:
     """Identifies music tracks using various recognition services"""
 
-    def __init__(self, api_key: Optional[str] = None, use_shazam: bool = False):
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        use_shazam: bool = True,  # Enable Shazam fallback by default
+        shazam_only: bool = False,  # Manual override to use only Shazam
+        acoustid_only: bool = False,  # Manual override to use only AcoustID
+    ):
         """
         Initialize the music recognizer.
 
         Args:
-            api_key: Optional API key for commercial services (Shazam)
-            use_shazam: Whether to use Shazam API (requires API key)
+            api_key: Optional API key (currently unused, kept for compatibility)
+            use_shazam: Whether to use Shazam as fallback (default: True)
+            shazam_only: Use only Shazam API (skip AcoustID)
+            acoustid_only: Use only AcoustID (skip Shazam)
         """
         self.api_key = api_key
-        self.use_shazam = use_shazam
+        self.use_shazam = use_shazam and not acoustid_only
+        self.shazam_only = shazam_only
+        self.acoustid_only = acoustid_only
         self._check_dependencies()
 
     def _check_dependencies(self):
@@ -65,10 +75,23 @@ class MusicRecognizer:
             self.acoustid_available = True
         except ImportError:
             self.acoustid_available = False
-            print(
-                "Warning: acoustid/chromaprint not installed. Install with: pip install pyacoustid",
-                file=sys.stderr,
-            )
+            if not self.shazam_only:
+                print(
+                    "Warning: acoustid/chromaprint not installed. Install with: pip install pyacoustid",
+                    file=sys.stderr,
+                )
+
+        try:
+            import shazamio
+
+            self.shazam_available = True
+        except ImportError:
+            self.shazam_available = False
+            if self.use_shazam or self.shazam_only:
+                print(
+                    "Warning: shazamio not installed. Install with: pip install shazamio",
+                    file=sys.stderr,
+                )
 
     def recognize_file(
         self, audio_path: str, duration: int = 30
@@ -83,14 +106,24 @@ class MusicRecognizer:
         Returns:
             RecognitionResult or None if recognition failed
         """
-        # Try AcoustID first (free)
-        if self.acoustid_available:
+        # If shazam_only mode, skip AcoustID
+        if self.shazam_only:
+            if self.shazam_available:
+                print("  Using Shazam only mode...", file=sys.stderr)
+                result = self._recognize_shazam(audio_path)
+                if result:
+                    return result
+            return None
+
+        # Try AcoustID first (free, fast)
+        if self.acoustid_available and not self.shazam_only:
             result = self._recognize_acoustid(audio_path, duration)
             if result:
                 return result
 
-        # Fall back to Shazam if configured
-        if self.use_shazam and self.api_key:
+        # Fall back to Shazam if AcoustID failed and Shazam is enabled
+        if self.use_shazam and self.shazam_available:
+            print("  AcoustID failed, trying Shazam fallback...", file=sys.stderr)
             result = self._recognize_shazam(audio_path)
             if result:
                 return result
@@ -149,7 +182,7 @@ class MusicRecognizer:
 
     def _recognize_shazam(self, audio_path: str) -> Optional[RecognitionResult]:
         """
-        Recognize music using Shazam API.
+        Recognize music using Shazam API (via ShazamIO).
 
         Args:
             audio_path: Path to audio file
@@ -157,10 +190,54 @@ class MusicRecognizer:
         Returns:
             RecognitionResult or None
         """
-        # TODO: Implement Shazam API integration
-        # This requires a commercial API key from RapidAPI or similar
-        print("Shazam API not yet implemented", file=sys.stderr)
-        return None
+        try:
+            from shazamio import Shazam
+            import asyncio
+
+            print(
+                f"Recognizing with Shazam: {Path(audio_path).name}...",
+                file=sys.stderr,
+            )
+
+            # ShazamIO is async, so we need to run it in an event loop
+            async def recognize_async():
+                shazam = Shazam()
+                result = await shazam.recognize(audio_path)
+                return result
+
+            # Run async function in sync context
+            try:
+                loop = asyncio.get_event_loop()
+            except RuntimeError:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+
+            shazam_result = loop.run_until_complete(recognize_async())
+
+            # Parse Shazam response
+            if shazam_result and "track" in shazam_result:
+                track = shazam_result["track"]
+                artist = track.get("subtitle", "")  # Artist name
+                title = track.get("title", "")  # Track title
+
+                if artist and title:
+                    print(
+                        f"  Match: {artist} - {title} (Shazam)", file=sys.stderr
+                    )
+                    return RecognitionResult(
+                        track_number=0,  # Will be set by caller
+                        artist=artist,
+                        title=title,
+                        confidence=0.95,  # Shazam generally has high confidence
+                        source="shazam",
+                    )
+
+            print("  No confident matches found", file=sys.stderr)
+            return None
+
+        except Exception as e:
+            print(f"Shazam recognition error: {e}", file=sys.stderr)
+            return None
 
     @staticmethod
     def match_with_tracklist(
