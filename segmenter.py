@@ -338,6 +338,45 @@ class DJMixSegmenter:
 
         return self._find_peaks(novelty, sr, sensitivity, expected_count)
 
+    def _process_single_chunk(
+        self,
+        chunk_data: Tuple[int, np.ndarray, int, int, int],
+    ) -> Tuple[int, np.ndarray]:
+        """
+        Process a single audio chunk to extract novelty curve.
+        This method is designed to be called by multiprocessing workers.
+
+        Args:
+            chunk_data: Tuple of (chunk_index, audio_chunk, sample_rate, start_idx, total_chunks)
+
+        Returns:
+            Tuple of (start_idx, novelty_curve)
+        """
+        chunk_index, chunk, sr, start_idx, total_chunks = chunk_data
+
+        # Extract chroma for this chunk
+        chroma = librosa.feature.chroma_cqt(y=chunk, sr=sr, hop_length=self.hop_length)
+
+        # Compute similarity matrix for this chunk
+        # Use sparse matrix with limited k-neighbors to reduce memory usage
+        chroma_similarity = librosa.segment.recurrence_matrix(
+            chroma, k=100, mode="affinity", metric="cosine", width=9, sparse=True
+        )
+
+        # Compute novelty curve
+        # Use sparse-friendly novelty computation
+        if hasattr(chroma_similarity, 'toarray'):
+            # Sparse matrix: compute novelty without full dense conversion
+            # Compute novelty as the negative sum of similarities (lower similarity = higher novelty)
+            novelty_chunk = -np.asarray(chroma_similarity.sum(axis=0)).flatten()
+        else:
+            # Dense matrix
+            novelty_chunk = np.sqrt(
+                librosa.segment.lag_to_recurrence(1 - chroma_similarity, axis=1).sum(axis=0)
+            )
+
+        return (start_idx, novelty_chunk)
+
     def _detect_boundaries_chunked(
         self,
         y: np.ndarray,
@@ -348,6 +387,7 @@ class DJMixSegmenter:
     ) -> List[float]:
         """
         Process audio in overlapping chunks to reduce memory usage.
+        Uses multiprocessing to process chunks in parallel.
 
         Args:
             y: Audio time series
@@ -356,7 +396,7 @@ class DJMixSegmenter:
             expected_count: Expected number of tracks
             chunk_duration: Duration of each chunk in seconds
         """
-        print(f"Large file detected ({len(y)/sr:.1f}s), using chunked processing", file=sys.stderr)
+        print(f"Large file detected ({len(y)/sr:.1f}s), using chunked processing with {cpu_count} workers", file=sys.stderr)
 
         chunk_samples = int(chunk_duration * sr)
         overlap_samples = int(60 * sr)  # 1 minute overlap between chunks
@@ -364,45 +404,24 @@ class DJMixSegmenter:
 
         total_chunks = int(np.ceil((len(y) - overlap_samples) / stride_samples))
 
-        # Extract chroma features for all chunks
+        # Prepare chunk data for parallel processing
+        chunk_tasks = []
+        for i in range(total_chunks):
+            start_idx = i * stride_samples
+            end_idx = min(start_idx + chunk_samples, len(y))
+            chunk = y[start_idx:end_idx]
+            chunk_tasks.append((i, chunk, sr, start_idx, total_chunks))
+
+        # Process chunks in parallel using multiprocessing
+        print(f"Processing {total_chunks} chunks in parallel...", file=sys.stderr)
+
         all_novelty = []
-
-        with tqdm(total=total_chunks, desc="Processing chunks", disable=False, file=sys.stderr) as pbar:
-            for i in range(total_chunks):
-                start_idx = i * stride_samples
-                end_idx = min(start_idx + chunk_samples, len(y))
-                chunk = y[start_idx:end_idx]
-
-                pbar.set_postfix_str(f"chunk {i+1}/{total_chunks}")
-
-                # Extract chroma for this chunk
-                with Spinner(f"Extracting chroma features (chunk {i+1}/{total_chunks})"):
-                    chroma = librosa.feature.chroma_cqt(y=chunk, sr=sr, hop_length=self.hop_length)
-
-                # Compute similarity matrix for this chunk
-                # Use sparse matrix with limited k-neighbors to reduce memory usage
-                with Spinner(f"Computing similarity matrix (chunk {i+1}/{total_chunks})"):
-                    chroma_similarity = librosa.segment.recurrence_matrix(
-                        chroma, k=100, mode="affinity", metric="cosine", width=9, sparse=True
-                    )
-
-                # Compute novelty curve
-                # Use sparse-friendly novelty computation
-                with Spinner(f"Computing novelty curve (chunk {i+1}/{total_chunks})"):
-                    if hasattr(chroma_similarity, 'toarray'):
-                        # Sparse matrix: compute novelty without full dense conversion
-                        # Compute novelty as the negative sum of similarities (lower similarity = higher novelty)
-                        novelty_chunk = -np.asarray(chroma_similarity.sum(axis=0)).flatten()
-                    else:
-                        # Dense matrix
-                        novelty_chunk = np.sqrt(
-                            librosa.segment.lag_to_recurrence(1 - chroma_similarity, axis=1).sum(axis=0)
-                        )
-
-                # Store novelty values with global time offset
-                all_novelty.append((start_idx, novelty_chunk))
-
-                pbar.update(1)
+        with multiprocessing.Pool(processes=cpu_count) as pool:
+            # Use imap_unordered for better performance with progress tracking
+            with tqdm(total=total_chunks, desc="Processing chunks", disable=False, file=sys.stderr) as pbar:
+                for result in pool.imap_unordered(self._process_single_chunk, chunk_tasks):
+                    all_novelty.append(result)
+                    pbar.update(1)
 
         # Combine novelty curves from all chunks
         print("Combining results from chunks...", file=sys.stderr)
