@@ -269,6 +269,9 @@ class Tagger < Formula
 
     # Install the main package
     venv.pip_install_and_link buildpath
+
+    # Install man page
+    man1.install "man/tagger.1"
   end
 
   test do
@@ -299,5 +302,8 @@ class Tagger < Formula
     # Should be installed as part of segmentation extras
     system libexec/"bin/python", "-c", "import acoustid; " \
            "print('Music recognition available')"
+
+    # Test man page installation
+    assert_predicate man1/"tagger.1", :exist?, "Man page should be installed"
   end
 end
