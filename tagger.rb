@@ -247,6 +247,16 @@ class Tagger < Formula
     sha256 "26445eca388f82e72884e0d580d5464cd801a3ea01e63e5601bdff9ba6a48de2"
   end
 
+  resource "pyacoustid" do
+    url "https://files.pythonhosted.org/packages/1e/c7/48a17b6a75888cf760a95f677cec5fe68fd00edf9072df14071008d9b2c0/pyacoustid-1.3.0.tar.gz"
+    sha256 "5f4f487191c19ebb908270b1b7b5297f132da332b1568b96a914574c079ed177"
+  end
+
+  resource "shazamio" do
+    url "https://files.pythonhosted.org/packages/05/b6/d7881361b565bc4736916532fcaf58e91eae8db338b2869b50636fbd8602/shazamio-0.8.1-py3-none-any.whl"
+    sha256 "ac4823dc9a8abd0b57455a3b29340c1fc090286bab0d8cc06eb862d7626691d0"
+  end
+
   def install
     # Create virtualenv
     venv = virtualenv_create(libexec, "python3.12")
@@ -280,15 +290,14 @@ class Tagger < Formula
     assert_match(/FILE "test_mix/, cue_content, "CUE file should reference the audio file"
     assert_match(/TRACK 01 AUDIO/, cue_content, "CUE file should contain at least one track"
 
-    # Test that segmentation dependencies are available
+    # Test that all segmentation dependencies are available
     # This verifies librosa, numpy, scipy, etc. are properly installed
     system libexec/"bin/python", "-c", "import librosa; import numpy; import scipy; " \
            "print('Segmentation dependencies OK')"
 
-    # Test music recognition dependencies (pyacoustid is optional)
-    # Just verify the module can be imported if available
-    system libexec/"bin/python", "-c", "try: import acoustid; " \
-           "print('Music recognition available'); " \
-           "except ImportError: print('Music recognition not available (optional)')"
+    # Test music recognition dependencies (pyacoustid)
+    # Should be installed as part of segmentation extras
+    system libexec/"bin/python", "-c", "import acoustid; " \
+           "print('Music recognition available')"
   end
 end
