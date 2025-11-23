@@ -575,10 +575,22 @@ This ensures mp3DirectCut can properly split the mix using the CUE sheet markers
 .PP
 Tagger implements several optimizations for processing large DJ mixes:
 .PP
+.B Multiprocessing (Parallel Chunk Processing):
+.RS
+.IP \(bu 3
+Chunks processed in parallel using all CPU cores (Python multiprocessing.Pool)
+.IP \(bu 3
+Automatic detection of CPU count for optimal worker allocation
+.IP \(bu 3
+Unordered result collection for maximum throughput
+.IP \(bu 3
+Significantly reduces processing time for large files (>10 minutes)
+.RE
+.PP
 .B Multi-Threading:
 .RS
 .IP \(bu 3
-All CPU cores enabled for BLAS/LAPACK operations
+All CPU cores enabled for BLAS/LAPACK operations within each worker
 .IP \(bu 3
 Parallel k-nearest neighbors computation
 .IP \(bu 3
@@ -590,7 +602,9 @@ Environment variables set: OMP_NUM_THREADS, MKL_NUM_THREADS, VECLIB_MAXIMUM_THRE
 .IP \(bu 3
 Sparse matrices for similarity computation (k=100 neighbors)
 .IP \(bu 3
-Chunked processing for files >10 minutes
+Chunked processing for files >10 minutes (10-minute chunks, 1-minute overlap)
+.IP \(bu 3
+Each chunk processed independently in separate process
 .IP \(bu 3
 Streaming audio loading via librosa
 .RE
