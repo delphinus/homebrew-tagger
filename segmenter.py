@@ -206,55 +206,56 @@ class DJMixSegmenter:
         expected_count: Optional[int] = None,
     ) -> List[float]:
         """Process entire audio file at once (for smaller files)."""
-        with tqdm(total=5, desc="Analyzing audio", disable=False, file=sys.stderr) as pbar:
-            # 1. Spectral contrast - detects changes in frequency balance
-            pbar.set_postfix_str("extracting spectral contrast")
-            contrast = librosa.feature.spectral_contrast(
-                y=y, sr=sr, hop_length=self.hop_length, n_bands=6
-            )
-            contrast_mean = np.mean(contrast, axis=0)
-            pbar.update(1)
+        print("Analyzing audio features:", file=sys.stderr)
 
-            # 2. Chroma features - detects key/tonality changes
-            pbar.set_postfix_str("extracting chroma features")
-            chroma = librosa.feature.chroma_cqt(y=y, sr=sr, hop_length=self.hop_length)
-            pbar.update(1)
+        # 1. Spectral contrast - detects changes in frequency balance
+        print("  [1/5] Extracting spectral contrast...", end="", flush=True, file=sys.stderr)
+        contrast = librosa.feature.spectral_contrast(
+            y=y, sr=sr, hop_length=self.hop_length, n_bands=6
+        )
+        contrast_mean = np.mean(contrast, axis=0)
+        print(" ✓", file=sys.stderr)
 
-            # 3. MFCC - detects timbral changes
-            pbar.set_postfix_str("extracting MFCC")
-            mfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=13, hop_length=self.hop_length)
-            pbar.update(1)
+        # 2. Chroma features - detects key/tonality changes
+        print("  [2/5] Extracting chroma features...", end="", flush=True, file=sys.stderr)
+        chroma = librosa.feature.chroma_cqt(y=y, sr=sr, hop_length=self.hop_length)
+        print(" ✓", file=sys.stderr)
 
-            # Compute self-similarity matrix for chroma
-            pbar.set_postfix_str("computing similarity matrix")
-            # Use sparse matrix with limited k-neighbors to reduce memory usage
-            # k should be small enough to avoid memory issues but large enough for detection
-            chroma_similarity = librosa.segment.recurrence_matrix(
-                chroma, k=100, mode="affinity", metric="cosine", width=9, sparse=True
-            )
-            pbar.update(1)
+        # 3. MFCC - detects timbral changes
+        print("  [3/5] Extracting MFCC...", end="", flush=True, file=sys.stderr)
+        mfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=13, hop_length=self.hop_length)
+        print(" ✓", file=sys.stderr)
 
-            # Compute novelty curve from similarity matrix
-            pbar.set_postfix_str("detecting boundaries")
-            # Use sparse-friendly novelty computation
-            # For sparse matrices, compute novelty as sum of dissimilarities
-            if hasattr(chroma_similarity, 'toarray'):
-                # Sparse matrix: compute novelty without full dense conversion
-                # For affinity matrices (values 0-1), dissimilarity = max_value - similarity
-                # Since sparse matrices store only non-zero values, we need a different approach
-                # Compute novelty as the negative sum of similarities (lower similarity = higher novelty)
-                novelty = -np.asarray(chroma_similarity.sum(axis=0)).flatten()
-            else:
-                # Dense matrix (small files)
-                novelty = np.sqrt(
-                    librosa.segment.lag_to_recurrence(1 - chroma_similarity, axis=1).sum(
-                        axis=0
-                    )
+        # Compute self-similarity matrix for chroma
+        print("  [4/5] Computing similarity matrix...", end="", flush=True, file=sys.stderr)
+        # Use sparse matrix with limited k-neighbors to reduce memory usage
+        # k should be small enough to avoid memory issues but large enough for detection
+        chroma_similarity = librosa.segment.recurrence_matrix(
+            chroma, k=100, mode="affinity", metric="cosine", width=9, sparse=True
+        )
+        print(" ✓", file=sys.stderr)
+
+        # Compute novelty curve from similarity matrix
+        print("  [5/5] Detecting boundaries...", end="", flush=True, file=sys.stderr)
+        # Use sparse-friendly novelty computation
+        # For sparse matrices, compute novelty as sum of dissimilarities
+        if hasattr(chroma_similarity, 'toarray'):
+            # Sparse matrix: compute novelty without full dense conversion
+            # For affinity matrices (values 0-1), dissimilarity = max_value - similarity
+            # Since sparse matrices store only non-zero values, we need a different approach
+            # Compute novelty as the negative sum of similarities (lower similarity = higher novelty)
+            novelty = -np.asarray(chroma_similarity.sum(axis=0)).flatten()
+        else:
+            # Dense matrix (small files)
+            novelty = np.sqrt(
+                librosa.segment.lag_to_recurrence(1 - chroma_similarity, axis=1).sum(
+                    axis=0
                 )
+            )
 
-            # Normalize novelty curve
-            novelty = (novelty - novelty.min()) / (novelty.max() - novelty.min() + 1e-8)
-            pbar.update(1)
+        # Normalize novelty curve
+        novelty = (novelty - novelty.min()) / (novelty.max() - novelty.min() + 1e-8)
+        print(" ✓", file=sys.stderr)
 
         return self._find_peaks(novelty, sr, sensitivity, expected_count)
 
@@ -510,8 +511,9 @@ class DJMixSegmenter:
         # Convert M4A/MP4 to AAC if needed
         processed_filepath = self.convert_to_aac(filepath)
 
-        print(f"Loading audio: {processed_filepath}", file=sys.stderr)
-        y, sr = self.load_audio(processed_filepath)
+        with tqdm(total=1, desc="Loading audio", disable=False, file=sys.stderr) as pbar:
+            y, sr = self.load_audio(processed_filepath)
+            pbar.update(1)
 
         duration = librosa.get_duration(y=y, sr=sr)
         print(f"Duration: {duration:.1f} seconds", file=sys.stderr)
@@ -641,6 +643,7 @@ def segment_mix(
     output_filepath: str | None = None,
     sensitivity: float = 0.5,
     tracklist: Optional[List[Track]] = None,
+    recognize_tracks: bool = False,
 ) -> str:
     """
     Segment a DJ mix and generate a CUE sheet.
@@ -650,6 +653,7 @@ def segment_mix(
         output_filepath: Path to save the CUE sheet (optional)
         sensitivity: Detection sensitivity (0.0-1.0, default 0.5)
         tracklist: Optional tracklist to guide segmentation
+        recognize_tracks: Whether to use music recognition to identify tracks
 
     Returns:
         CUE sheet content as string
@@ -657,6 +661,65 @@ def segment_mix(
     # Analyze the mix (returns boundaries and processed filepath)
     segmenter = DJMixSegmenter()
     boundaries, processed_filepath = segmenter.analyze_mix(audio_filepath, sensitivity, tracklist)
+
+    # Recognize tracks if requested
+    recognized_tracklist = None
+    if recognize_tracks:
+        try:
+            from music_recognizer import MusicRecognizer, RecognitionResult
+
+            recognizer = MusicRecognizer()
+            recognized_tracklist = []
+
+            print("\nRecognizing tracks...", file=sys.stderr)
+
+            # Create list of boundaries with start of mix (0.0)
+            all_boundaries = [0.0] + boundaries
+
+            for i in range(len(all_boundaries) - 1):
+                start_time = all_boundaries[i]
+                end_time = all_boundaries[i + 1]
+                track_num = i + 1
+
+                print(f"\nTrack {track_num}: {start_time:.1f}s - {end_time:.1f}s", file=sys.stderr)
+
+                result = recognizer.extract_and_recognize_segment(
+                    processed_filepath, start_time, end_time, track_num
+                )
+
+                if result and tracklist:
+                    # Try to match with provided tracklist
+                    matched_num = MusicRecognizer.match_with_tracklist(result, tracklist)
+                    if matched_num and matched_num <= len(tracklist):
+                        # Use tracklist info but keep recognition confidence
+                        track = tracklist[matched_num - 1]
+                        result.artist = track.artist
+                        result.title = track.title
+                        result.source = "tracklist+acoustid"
+
+                if result:
+                    recognized_tracklist.append(result)
+                    print(f"  ✓ {result}", file=sys.stderr)
+                else:
+                    print(f"  ✗ No match found", file=sys.stderr)
+
+            # Convert RecognitionResult objects to Track objects for CUE generation
+            if recognized_tracklist:
+                from tracklist_parser import Track as TrackObj
+                tracklist = []
+                for r in recognized_tracklist:
+                    tracklist.append(TrackObj(
+                        number=r.track_number,
+                        artist=r.artist,
+                        title=r.title,
+                        timestamp=None
+                    ))
+
+        except ImportError as e:
+            print(f"Warning: Music recognition not available: {e}", file=sys.stderr)
+            print("Install with: pip install pyacoustid", file=sys.stderr)
+        except Exception as e:
+            print(f"Warning: Music recognition failed: {e}", file=sys.stderr)
 
     # Generate CUE sheet
     generator = CueSheetGenerator()
@@ -711,6 +774,11 @@ Note:
         default=0.5,
         help="Detection sensitivity (0.0-1.0, default 0.5)",
     )
+    parser.add_argument(
+        "--recognize",
+        action="store_true",
+        help="Use music recognition to identify tracks (requires pyacoustid)",
+    )
 
     args = parser.parse_args()
 
@@ -720,7 +788,7 @@ Note:
         sys.exit(1)
 
     try:
-        segment_mix(args.audio_file, args.output, args.sensitivity)
+        segment_mix(args.audio_file, args.output, args.sensitivity, recognize_tracks=args.recognize)
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
