@@ -1452,7 +1452,7 @@ Note:
                 args.sensitivity,
                 tracklist,
                 recognize_tracks=args.recognize,
-                verify_boundaries=args.verify_boundaries
+                verify_boundaries=args.verify_boundaries,
             )
         except Exception as e:
             print(f"Error: {e}", file=sys.stderr)
