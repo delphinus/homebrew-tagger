@@ -38,17 +38,19 @@ class TracklistParser:
     """Parses tracklists from various text formats"""
 
     # Common patterns for tracklist entries
+    # Support both hyphen (-) and en-dash (–) as separators
+    # Allow flexible spacing: require space before dash, optional space after
     PATTERNS = [
-        # "1. Artist - Title"
-        re.compile(r"^(\d+)[\.\)]\s+(.+?)\s+-\s+(.+)$"),
-        # "01 Artist - Title"
-        re.compile(r"^(\d+)\s+(.+?)\s+-\s+(.+)$"),
+        # "1. Artist - Title" or "1. Artist – Title" or "1. Artist -Title"
+        re.compile(r"^(\d+)[\.\)]\s+(.+?)\s+[-–]\s*(.+)$"),
+        # "01 Artist - Title" or "01 Artist – Title" or "01 Artist -Title"
+        re.compile(r"^(\d+)\s+(.+?)\s+[-–]\s*(.+)$"),
         # "1. Title" (no artist)
         re.compile(r"^(\d+)[\.\)]\s+(.+)$"),
         # "01 Title" (no artist)
         re.compile(r"^(\d+)\s+(.+)$"),
-        # "Artist - Title" (no track number, will auto-number)
-        re.compile(r"^(.+?)\s+-\s+(.+)$"),
+        # "Artist - Title" or "Artist – Title" or "Artist -Title" (no track number, will auto-number)
+        re.compile(r"^(.+?)\s+[-–]\s*(.+)$"),
     ]
 
     # Patterns for timestamps

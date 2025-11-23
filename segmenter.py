@@ -427,12 +427,75 @@ class DJMixSegmenter:
         print(f"Found {len(boundaries)} boundaries", file=sys.stderr)
         return boundaries
 
+    def convert_to_aac(self, filepath: str) -> str:
+        """
+        Convert M4A/MP4 to raw ADTS AAC format for mp3DirectCut compatibility.
+
+        Args:
+            filepath: Path to audio file
+
+        Returns:
+            Path to converted AAC file (or original if already AAC/MP3)
+        """
+        import subprocess
+        import shutil
+
+        path = Path(filepath)
+        ext = path.suffix.lower()
+
+        # Check if conversion is needed
+        if ext in [".mp3", ".wav"]:
+            # No conversion needed
+            return filepath
+
+        # Check file format
+        try:
+            result = subprocess.run(
+                ["ffprobe", "-v", "error", "-show_format", "-of", "default=noprint_wrappers=1", str(filepath)],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+
+            # Check if it's MP4/M4A container
+            is_mp4_container = "mov,mp4,m4a" in result.stdout or "format_name=mov,mp4,m4a" in result.stdout
+
+            if is_mp4_container or ext in [".m4a", ".mp4", ".aac"]:
+                # Convert to raw ADTS AAC
+                output_path = path.with_suffix(".aac")
+                if output_path.stem.endswith("_converted"):
+                    # Already converted
+                    return str(output_path)
+
+                # Add _converted suffix to avoid overwriting
+                output_path = path.with_name(f"{path.stem}_converted.aac")
+
+                if output_path.exists():
+                    print(f"Using existing converted file: {output_path}", file=sys.stderr)
+                    return str(output_path)
+
+                print(f"Converting {ext} to raw AAC format for mp3DirectCut compatibility...", file=sys.stderr)
+                subprocess.run(
+                    ["ffmpeg", "-i", str(filepath), "-c", "copy", "-f", "adts", "-y", str(output_path)],
+                    check=True,
+                    capture_output=True,
+                )
+                print(f"Converted: {output_path}", file=sys.stderr)
+                return str(output_path)
+
+        except subprocess.CalledProcessError as e:
+            print(f"Warning: Could not check format, using original file: {e}", file=sys.stderr)
+        except FileNotFoundError:
+            print("Warning: ffmpeg/ffprobe not found, using original file", file=sys.stderr)
+
+        return filepath
+
     def analyze_mix(
         self,
         filepath: str,
         sensitivity: float = 0.5,
         tracklist: Optional[List[Track]] = None,
-    ) -> List[float]:
+    ) -> Tuple[List[float], str]:
         """
         Analyze a DJ mix and detect track boundaries.
 
@@ -442,10 +505,13 @@ class DJMixSegmenter:
             tracklist: Optional tracklist to guide detection
 
         Returns:
-            List of boundary timestamps in seconds
+            Tuple of (List of boundary timestamps in seconds, path to processed audio file)
         """
-        print(f"Loading audio: {filepath}", file=sys.stderr)
-        y, sr = self.load_audio(filepath)
+        # Convert M4A/MP4 to AAC if needed
+        processed_filepath = self.convert_to_aac(filepath)
+
+        print(f"Loading audio: {processed_filepath}", file=sys.stderr)
+        y, sr = self.load_audio(processed_filepath)
 
         duration = librosa.get_duration(y=y, sr=sr)
         print(f"Duration: {duration:.1f} seconds", file=sys.stderr)
@@ -455,12 +521,12 @@ class DJMixSegmenter:
             print("Using timestamps from tracklist", file=sys.stderr)
             boundaries = [t.timestamp for t in tracklist[1:] if t.timestamp is not None]
             print(f"Found {len(boundaries)} boundaries from tracklist", file=sys.stderr)
-            return sorted(boundaries)
+            return sorted(boundaries), processed_filepath
 
         # Otherwise, detect boundaries with optional track count constraint
         expected_count = len(tracklist) if tracklist else None
         boundaries = self.detect_boundaries(y, sr, sensitivity, expected_count)
-        return boundaries
+        return boundaries, processed_filepath
 
 
 class CueSheetGenerator:
@@ -509,8 +575,11 @@ class CueSheetGenerator:
         ext = audio_path.suffix.lower()
         if ext == ".mp3":
             file_type = "MP3"
-        elif ext in [".m4a", ".aac"]:
+        elif ext == ".m4a":
             file_type = "MP4"
+        elif ext == ".aac":
+            # Raw ADTS AAC - use WAVE for mp3DirectCut compatibility
+            file_type = "WAVE"
         elif ext == ".wav":
             file_type = "WAVE"
         else:
@@ -585,20 +654,22 @@ def segment_mix(
     Returns:
         CUE sheet content as string
     """
-    # Analyze the mix
+    # Analyze the mix (returns boundaries and processed filepath)
     segmenter = DJMixSegmenter()
-    boundaries = segmenter.analyze_mix(audio_filepath, sensitivity, tracklist)
+    boundaries, processed_filepath = segmenter.analyze_mix(audio_filepath, sensitivity, tracklist)
 
     # Generate CUE sheet
     generator = CueSheetGenerator()
 
     # Default output path if not specified
     if output_filepath is None:
+        # Use the original audio filepath for the output filename
         audio_path = Path(audio_filepath)
         output_filepath = str(audio_path.with_suffix(".cue"))
 
+    # Use the processed filepath (converted AAC if applicable) for the CUE sheet
     cue_content = generator.generate_cue(
-        audio_filepath, boundaries, output_filepath, tracklist
+        processed_filepath, boundaries, output_filepath, tracklist
     )
 
     return cue_content
