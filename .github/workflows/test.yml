@@ -57,9 +57,15 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    - name: Setup Homebrew tap
+      run: |
+        # Create a local tap for testing
+        mkdir -p $(brew --repository)/Library/Taps/delphinus/homebrew-tagger
+        cp -r . $(brew --repository)/Library/Taps/delphinus/homebrew-tagger/
+
     - name: Install tagger via Homebrew
       run: |
-        brew install --build-from-source --formula ./tagger.rb
+        brew install --build-from-source delphinus/tagger/tagger
 
     - name: Verify tagger installation
       run: |
@@ -77,9 +83,6 @@ jobs:
           echo "Tagger installation: ${TAGGER_CELLAR}"
           echo "Python virtualenv: ${TAGGER_VENV}"
           ${TAGGER_VENV}/bin/python -c "import sys; print('Python version:', sys.version)"
-          echo ""
-          echo "=== Installed packages ==="
-          ${TAGGER_VENV}/bin/pip list
           echo ""
           echo "=== Checking critical dependencies ==="
           ${TAGGER_VENV}/bin/python -c "import librosa; print('✓ librosa:', librosa.__version__)"
