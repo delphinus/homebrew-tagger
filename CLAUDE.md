@@ -66,6 +66,6 @@
 
 4. **Post-CI Workflow**
    - After all CI checks pass: merge the PR
-   - Create release if version was bumped
-   - Update release page with release notes
-   - Clean up feature branch after merge
+   - **ALWAYS create a GitHub release after merging a PR**
+   - Update release page with detailed release notes
+   - Clean up feature branch after merge (usually done automatically with --delete-branch)
