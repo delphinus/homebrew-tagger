@@ -178,6 +178,8 @@ class DJMixSegmenter:
         - Chroma features: Detects key/tonality changes
         - Temporal features: Detects rhythm/tempo changes
 
+        For large files, uses chunked processing to reduce memory usage.
+
         Args:
             y: Audio time series
             sr: Sample rate
@@ -187,6 +189,23 @@ class DJMixSegmenter:
         Returns:
             List of boundary timestamps in seconds
         """
+        duration = len(y) / sr
+        # Use chunked processing for files longer than 30 minutes
+        chunk_duration = 30 * 60  # 30 minutes in seconds
+
+        if duration > chunk_duration:
+            return self._detect_boundaries_chunked(y, sr, sensitivity, expected_count, chunk_duration)
+        else:
+            return self._detect_boundaries_full(y, sr, sensitivity, expected_count)
+
+    def _detect_boundaries_full(
+        self,
+        y: np.ndarray,
+        sr: int,
+        sensitivity: float = 0.5,
+        expected_count: Optional[int] = None,
+    ) -> List[float]:
+        """Process entire audio file at once (for smaller files)."""
         with tqdm(total=5, desc="Analyzing audio", disable=False, file=sys.stderr) as pbar:
             # 1. Spectral contrast - detects changes in frequency balance
             pbar.set_postfix_str("extracting spectral contrast")
@@ -225,6 +244,102 @@ class DJMixSegmenter:
             novelty = (novelty - novelty.min()) / (novelty.max() - novelty.min() + 1e-8)
             pbar.update(1)
 
+        return self._find_peaks(novelty, sr, sensitivity, expected_count)
+
+    def _detect_boundaries_chunked(
+        self,
+        y: np.ndarray,
+        sr: int,
+        sensitivity: float = 0.5,
+        expected_count: Optional[int] = None,
+        chunk_duration: float = 30 * 60,
+    ) -> List[float]:
+        """
+        Process audio in overlapping chunks to reduce memory usage.
+
+        Args:
+            y: Audio time series
+            sr: Sample rate
+            sensitivity: Detection sensitivity (0.0-1.0)
+            expected_count: Expected number of tracks
+            chunk_duration: Duration of each chunk in seconds
+        """
+        print(f"Large file detected ({len(y)/sr:.1f}s), using chunked processing", file=sys.stderr)
+
+        chunk_samples = int(chunk_duration * sr)
+        overlap_samples = int(60 * sr)  # 1 minute overlap between chunks
+        stride_samples = chunk_samples - overlap_samples
+
+        total_chunks = int(np.ceil((len(y) - overlap_samples) / stride_samples))
+
+        # Extract chroma features for all chunks
+        all_novelty = []
+
+        with tqdm(total=total_chunks, desc="Processing chunks", disable=False, file=sys.stderr) as pbar:
+            for i in range(total_chunks):
+                start_idx = i * stride_samples
+                end_idx = min(start_idx + chunk_samples, len(y))
+                chunk = y[start_idx:end_idx]
+
+                pbar.set_postfix_str(f"chunk {i+1}/{total_chunks}")
+
+                # Extract chroma for this chunk
+                chroma = librosa.feature.chroma_cqt(y=chunk, sr=sr, hop_length=self.hop_length)
+
+                # Compute similarity matrix for this chunk
+                chroma_similarity = librosa.segment.recurrence_matrix(
+                    chroma, mode="affinity", metric="cosine", width=9
+                )
+
+                # Compute novelty curve
+                novelty_chunk = np.sqrt(
+                    librosa.segment.lag_to_recurrence(1 - chroma_similarity, axis=1).sum(axis=0)
+                )
+
+                # Store novelty values with global time offset
+                all_novelty.append((start_idx, novelty_chunk))
+
+                pbar.update(1)
+
+        # Combine novelty curves from all chunks
+        print("Combining results from chunks...", file=sys.stderr)
+        total_frames = librosa.time_to_frames(len(y) / sr, sr=sr, hop_length=self.hop_length)
+        combined_novelty = np.zeros(total_frames)
+        weights = np.zeros(total_frames)
+
+        for start_idx, novelty_chunk in all_novelty:
+            # Convert sample index to frame index
+            start_frame = librosa.time_to_frames(start_idx / sr, sr=sr, hop_length=self.hop_length)
+            end_frame = min(start_frame + len(novelty_chunk), total_frames)
+            chunk_len = end_frame - start_frame
+
+            # Use triangular weighting to blend overlapping regions
+            weight = np.ones(chunk_len)
+            fade_len = min(overlap_samples // self.hop_length, chunk_len // 4)
+            if fade_len > 0:
+                weight[:fade_len] = np.linspace(0, 1, fade_len)
+                weight[-fade_len:] = np.linspace(1, 0, fade_len)
+
+            combined_novelty[start_frame:end_frame] += novelty_chunk[:chunk_len] * weight
+            weights[start_frame:end_frame] += weight
+
+        # Normalize by weights
+        weights[weights == 0] = 1  # Avoid division by zero
+        novelty = combined_novelty / weights
+
+        # Normalize novelty curve
+        novelty = (novelty - novelty.min()) / (novelty.max() - novelty.min() + 1e-8)
+
+        return self._find_peaks(novelty, sr, sensitivity, expected_count)
+
+    def _find_peaks(
+        self,
+        novelty: np.ndarray,
+        sr: int,
+        sensitivity: float,
+        expected_count: Optional[int],
+    ) -> List[float]:
+        """Find peaks in novelty curve to identify boundaries."""
         # Adjust threshold based on sensitivity
         # Lower sensitivity = higher threshold = fewer boundaries
         threshold = 0.9 - (sensitivity * 0.6)  # Range: 0.3 to 0.9
