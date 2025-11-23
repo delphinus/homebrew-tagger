@@ -262,6 +262,33 @@ class Tagger < Formula
   end
 
   test do
+    # Test basic functionality
     system bin/"tagger", "--help"
+    system bin/"tagger", "--version"
+
+    # Test DJ mix segmentation with a generated audio file
+    # Generate a 30-second test audio file (sine wave at 440Hz)
+    system "ffmpeg", "-f", "lavfi", "-i", "sine=frequency=440:duration=30",
+           "-ar", "44100", "-ac", "2", "-y", "test_mix.mp3"
+
+    # Test --segment without recognition (should work without pyacoustid)
+    system bin/"tagger", "--segment", "test_mix.mp3", "-o", "test.cue"
+    assert_predicate testpath/"test.cue", :exist?, "CUE file should be created"
+
+    # Verify CUE file contains required headers
+    cue_content = (testpath/"test.cue").read
+    assert_match(/FILE "test_mix/, cue_content, "CUE file should reference the audio file"
+    assert_match(/TRACK 01 AUDIO/, cue_content, "CUE file should contain at least one track"
+
+    # Test that segmentation dependencies are available
+    # This verifies librosa, numpy, scipy, etc. are properly installed
+    system libexec/"bin/python", "-c", "import librosa; import numpy; import scipy; " \
+           "print('Segmentation dependencies OK')"
+
+    # Test music recognition dependencies (pyacoustid is optional)
+    # Just verify the module can be imported if available
+    system libexec/"bin/python", "-c", "try: import acoustid; " \
+           "print('Music recognition available'); " \
+           "except ImportError: print('Music recognition not available (optional)')"
   end
 end
