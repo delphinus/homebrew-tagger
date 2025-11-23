@@ -80,6 +80,44 @@ except ImportError:
         def set_postfix_str(self, s):
             pass
 
+
+# Spinner utility for showing progress during long operations
+class Spinner:
+    """Displays a spinning animation during long operations"""
+
+    def __init__(self, message: str):
+        self.message = message
+        self.spinner_chars = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+        self.i = 0
+        self.stop_spinner = False
+        self.thread = None
+
+    def __enter__(self):
+        import threading
+        import time
+
+        def show_spinner():
+            while not self.stop_spinner:
+                print(
+                    f"\r{self.spinner_chars[self.i % len(self.spinner_chars)]} {self.message}...",
+                    end="",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                self.i += 1
+                time.sleep(0.1)
+            print(f"\r✓ {self.message}" + " " * 30, file=sys.stderr, flush=True)
+
+        self.stop_spinner = False
+        self.thread = threading.Thread(target=show_spinner, daemon=True)
+        self.thread.start()
+        return self
+
+    def __exit__(self, *args):
+        self.stop_spinner = True
+        if self.thread:
+            self.thread.join(timeout=0.5)
+
 # Monkey-patch sklearn.neighbors.NearestNeighbors to use all CPU cores
 # This makes librosa's recurrence_matrix use parallel processing
 _original_nn_init = sklearn.neighbors.NearestNeighbors.__init__
@@ -209,53 +247,48 @@ class DJMixSegmenter:
         print("Analyzing audio features:", file=sys.stderr)
 
         # 1. Spectral contrast - detects changes in frequency balance
-        print("  [1/5] Extracting spectral contrast...", end="", flush=True, file=sys.stderr)
-        contrast = librosa.feature.spectral_contrast(
-            y=y, sr=sr, hop_length=self.hop_length, n_bands=6
-        )
-        contrast_mean = np.mean(contrast, axis=0)
-        print(" ✓", file=sys.stderr)
+        with Spinner("[1/5] Extracting spectral contrast"):
+            contrast = librosa.feature.spectral_contrast(
+                y=y, sr=sr, hop_length=self.hop_length, n_bands=6
+            )
+            contrast_mean = np.mean(contrast, axis=0)
 
         # 2. Chroma features - detects key/tonality changes
-        print("  [2/5] Extracting chroma features...", end="", flush=True, file=sys.stderr)
-        chroma = librosa.feature.chroma_cqt(y=y, sr=sr, hop_length=self.hop_length)
-        print(" ✓", file=sys.stderr)
+        with Spinner("[2/5] Extracting chroma features"):
+            chroma = librosa.feature.chroma_cqt(y=y, sr=sr, hop_length=self.hop_length)
 
         # 3. MFCC - detects timbral changes
-        print("  [3/5] Extracting MFCC...", end="", flush=True, file=sys.stderr)
-        mfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=13, hop_length=self.hop_length)
-        print(" ✓", file=sys.stderr)
+        with Spinner("[3/5] Extracting MFCC"):
+            mfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=13, hop_length=self.hop_length)
 
         # Compute self-similarity matrix for chroma
-        print("  [4/5] Computing similarity matrix...", end="", flush=True, file=sys.stderr)
-        # Use sparse matrix with limited k-neighbors to reduce memory usage
-        # k should be small enough to avoid memory issues but large enough for detection
-        chroma_similarity = librosa.segment.recurrence_matrix(
-            chroma, k=100, mode="affinity", metric="cosine", width=9, sparse=True
-        )
-        print(" ✓", file=sys.stderr)
-
-        # Compute novelty curve from similarity matrix
-        print("  [5/5] Detecting boundaries...", end="", flush=True, file=sys.stderr)
-        # Use sparse-friendly novelty computation
-        # For sparse matrices, compute novelty as sum of dissimilarities
-        if hasattr(chroma_similarity, 'toarray'):
-            # Sparse matrix: compute novelty without full dense conversion
-            # For affinity matrices (values 0-1), dissimilarity = max_value - similarity
-            # Since sparse matrices store only non-zero values, we need a different approach
-            # Compute novelty as the negative sum of similarities (lower similarity = higher novelty)
-            novelty = -np.asarray(chroma_similarity.sum(axis=0)).flatten()
-        else:
-            # Dense matrix (small files)
-            novelty = np.sqrt(
-                librosa.segment.lag_to_recurrence(1 - chroma_similarity, axis=1).sum(
-                    axis=0
-                )
+        with Spinner("[4/5] Computing similarity matrix"):
+            # Use sparse matrix with limited k-neighbors to reduce memory usage
+            # k should be small enough to avoid memory issues but large enough for detection
+            chroma_similarity = librosa.segment.recurrence_matrix(
+                chroma, k=100, mode="affinity", metric="cosine", width=9, sparse=True
             )
 
-        # Normalize novelty curve
-        novelty = (novelty - novelty.min()) / (novelty.max() - novelty.min() + 1e-8)
-        print(" ✓", file=sys.stderr)
+        # Compute novelty curve from similarity matrix
+        with Spinner("[5/5] Detecting boundaries"):
+            # Use sparse-friendly novelty computation
+            # For sparse matrices, compute novelty as sum of dissimilarities
+            if hasattr(chroma_similarity, 'toarray'):
+                # Sparse matrix: compute novelty without full dense conversion
+                # For affinity matrices (values 0-1), dissimilarity = max_value - similarity
+                # Since sparse matrices store only non-zero values, we need a different approach
+                # Compute novelty as the negative sum of similarities (lower similarity = higher novelty)
+                novelty = -np.asarray(chroma_similarity.sum(axis=0)).flatten()
+            else:
+                # Dense matrix (small files)
+                novelty = np.sqrt(
+                    librosa.segment.lag_to_recurrence(1 - chroma_similarity, axis=1).sum(
+                        axis=0
+                    )
+                )
+
+            # Normalize novelty curve
+            novelty = (novelty - novelty.min()) / (novelty.max() - novelty.min() + 1e-8)
 
         return self._find_peaks(novelty, sr, sensitivity, expected_count)
 
@@ -511,9 +544,8 @@ class DJMixSegmenter:
         # Convert M4A/MP4 to AAC if needed
         processed_filepath = self.convert_to_aac(filepath)
 
-        with tqdm(total=1, desc="Loading audio", disable=False, file=sys.stderr) as pbar:
+        with Spinner("Loading audio"):
             y, sr = self.load_audio(processed_filepath)
-            pbar.update(1)
 
         duration = librosa.get_duration(y=y, sr=sr)
         print(f"Duration: {duration:.1f} seconds", file=sys.stderr)
@@ -683,19 +715,20 @@ def segment_mix(
 
                 print(f"\nTrack {track_num}: {start_time:.1f}s - {end_time:.1f}s", file=sys.stderr)
 
-                result = recognizer.extract_and_recognize_segment(
-                    processed_filepath, start_time, end_time, track_num
-                )
+                with Spinner(f"Recognizing track {track_num}"):
+                    result = recognizer.extract_and_recognize_segment(
+                        processed_filepath, start_time, end_time, track_num
+                    )
 
-                if result and tracklist:
-                    # Try to match with provided tracklist
-                    matched_num = MusicRecognizer.match_with_tracklist(result, tracklist)
-                    if matched_num and matched_num <= len(tracklist):
-                        # Use tracklist info but keep recognition confidence
-                        track = tracklist[matched_num - 1]
-                        result.artist = track.artist
-                        result.title = track.title
-                        result.source = "tracklist+acoustid"
+                    if result and tracklist:
+                        # Try to match with provided tracklist
+                        matched_num = MusicRecognizer.match_with_tracklist(result, tracklist)
+                        if matched_num and matched_num <= len(tracklist):
+                            # Use tracklist info but keep recognition confidence
+                            track = tracklist[matched_num - 1]
+                            result.artist = track.artist
+                            result.title = track.title
+                            result.source = "tracklist+acoustid"
 
                 if result:
                     recognized_tracklist.append(result)
