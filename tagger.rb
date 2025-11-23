@@ -287,8 +287,8 @@ class Tagger < Formula
 
     # Verify CUE file contains required headers
     cue_content = (testpath/"test.cue").read
-    assert_match(/FILE "test_mix/, cue_content, "CUE file should reference the audio file"
-    assert_match(/TRACK 01 AUDIO/, cue_content, "CUE file should contain at least one track"
+    assert_match(/FILE "test_mix/, cue_content, "CUE file should reference the audio file")
+    assert_match(/TRACK 01 AUDIO/, cue_content, "CUE file should contain at least one track")
 
     # Test that all segmentation dependencies are available
     # This verifies librosa, numpy, scipy, etc. are properly installed
