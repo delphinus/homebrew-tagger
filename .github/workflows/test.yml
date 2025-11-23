@@ -57,9 +57,15 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    - name: Setup Homebrew tap
+      run: |
+        # Create a local tap for testing
+        mkdir -p $(brew --repository)/Library/Taps/delphinus/homebrew-tagger
+        cp -r . $(brew --repository)/Library/Taps/delphinus/homebrew-tagger/
+
     - name: Install tagger via Homebrew
       run: |
-        brew install --build-from-source --formula ./tagger.rb
+        brew install --build-from-source delphinus/tagger/tagger
 
     - name: Verify tagger installation
       run: |
