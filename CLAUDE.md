@@ -47,7 +47,10 @@
 - `main`: Production-ready code
 - `feature/*`: New features (e.g., music recognition)
 - `fix/*`: Bug fixes (e.g., version corrections)
-- Always create PRs for review before merging to main
+- **CRITICAL: ALWAYS create PRs for review before merging to main**
+  - **NEVER push directly to main**, even for version bumps or formula updates
+  - Current branch protection allows admin bypass - resist the temptation
+  - All changes must go through PR workflow with CI checks
 
 ## Release and Versioning Rules
 
