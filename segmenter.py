@@ -190,8 +190,8 @@ class DJMixSegmenter:
             List of boundary timestamps in seconds
         """
         duration = len(y) / sr
-        # Use chunked processing for files longer than 30 minutes
-        chunk_duration = 30 * 60  # 30 minutes in seconds
+        # Use chunked processing for files longer than 10 minutes
+        chunk_duration = 10 * 60  # 10 minutes in seconds
 
         if duration > chunk_duration:
             return self._detect_boundaries_chunked(y, sr, sensitivity, expected_count, chunk_duration)
@@ -227,18 +227,28 @@ class DJMixSegmenter:
 
             # Compute self-similarity matrix for chroma
             pbar.set_postfix_str("computing similarity matrix")
+            # Use sparse matrix with limited k-neighbors to reduce memory usage
+            # k should be small enough to avoid memory issues but large enough for detection
             chroma_similarity = librosa.segment.recurrence_matrix(
-                chroma, mode="affinity", metric="cosine", width=9
+                chroma, k=100, mode="affinity", metric="cosine", width=9, sparse=True
             )
             pbar.update(1)
 
             # Compute novelty curve from similarity matrix
             pbar.set_postfix_str("detecting boundaries")
-            novelty = np.sqrt(
-                librosa.segment.lag_to_recurrence(1 - chroma_similarity, axis=1).sum(
-                    axis=0
+            # Use sparse-friendly novelty computation
+            # For sparse matrices, compute novelty as sum of dissimilarities
+            if hasattr(chroma_similarity, 'toarray'):
+                # Sparse matrix: compute novelty without full dense conversion
+                # Sum along axis to get frame-wise dissimilarity scores
+                novelty = np.asarray((1 - chroma_similarity).sum(axis=0)).flatten()
+            else:
+                # Dense matrix (small files)
+                novelty = np.sqrt(
+                    librosa.segment.lag_to_recurrence(1 - chroma_similarity, axis=1).sum(
+                        axis=0
+                    )
                 )
-            )
 
             # Normalize novelty curve
             novelty = (novelty - novelty.min()) / (novelty.max() - novelty.min() + 1e-8)
@@ -287,14 +297,21 @@ class DJMixSegmenter:
                 chroma = librosa.feature.chroma_cqt(y=chunk, sr=sr, hop_length=self.hop_length)
 
                 # Compute similarity matrix for this chunk
+                # Use sparse matrix with limited k-neighbors to reduce memory usage
                 chroma_similarity = librosa.segment.recurrence_matrix(
-                    chroma, mode="affinity", metric="cosine", width=9
+                    chroma, k=100, mode="affinity", metric="cosine", width=9, sparse=True
                 )
 
                 # Compute novelty curve
-                novelty_chunk = np.sqrt(
-                    librosa.segment.lag_to_recurrence(1 - chroma_similarity, axis=1).sum(axis=0)
-                )
+                # Use sparse-friendly novelty computation
+                if hasattr(chroma_similarity, 'toarray'):
+                    # Sparse matrix: compute novelty without full dense conversion
+                    novelty_chunk = np.asarray((1 - chroma_similarity).sum(axis=0)).flatten()
+                else:
+                    # Dense matrix
+                    novelty_chunk = np.sqrt(
+                        librosa.segment.lag_to_recurrence(1 - chroma_similarity, axis=1).sum(axis=0)
+                    )
 
                 # Store novelty values with global time offset
                 all_novelty.append((start_idx, novelty_chunk))
