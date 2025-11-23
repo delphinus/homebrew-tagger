@@ -240,8 +240,10 @@ class DJMixSegmenter:
             # For sparse matrices, compute novelty as sum of dissimilarities
             if hasattr(chroma_similarity, 'toarray'):
                 # Sparse matrix: compute novelty without full dense conversion
-                # Sum along axis to get frame-wise dissimilarity scores
-                novelty = np.asarray((1 - chroma_similarity).sum(axis=0)).flatten()
+                # For affinity matrices (values 0-1), dissimilarity = max_value - similarity
+                # Since sparse matrices store only non-zero values, we need a different approach
+                # Compute novelty as the negative sum of similarities (lower similarity = higher novelty)
+                novelty = -np.asarray(chroma_similarity.sum(axis=0)).flatten()
             else:
                 # Dense matrix (small files)
                 novelty = np.sqrt(
@@ -306,7 +308,8 @@ class DJMixSegmenter:
                 # Use sparse-friendly novelty computation
                 if hasattr(chroma_similarity, 'toarray'):
                     # Sparse matrix: compute novelty without full dense conversion
-                    novelty_chunk = np.asarray((1 - chroma_similarity).sum(axis=0)).flatten()
+                    # Compute novelty as the negative sum of similarities (lower similarity = higher novelty)
+                    novelty_chunk = -np.asarray(chroma_similarity.sum(axis=0)).flatten()
                 else:
                     # Dense matrix
                     novelty_chunk = np.sqrt(
