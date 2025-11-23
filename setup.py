@@ -16,7 +16,7 @@ setup(
     long_description_content_type="text/markdown",
     author="delphinus",
     url="https://github.com/delphinus/tagger",
-    py_modules=["segmenter", "tracklist_parser"],
+    py_modules=["segmenter", "tracklist_parser", "music_recognizer"],
     scripts=["tagger"],
     install_requires=[
         "mutagen>=1.45.0",
