@@ -31,7 +31,8 @@ setup(
             "requests>=2.31.0",  # For SoundCloud URL fetching
             "beautifulsoup4>=4.12.0",  # For HTML parsing
             "tqdm>=4.66.0",  # For progress bars
-            "pyacoustid>=1.3.0",  # For music recognition
+            "pyacoustid>=1.3.0",  # For music recognition (AcoustID)
+            "shazamio>=0.8.0",  # For music recognition (Shazam fallback)
         ],
         "test": [
             "pytest>=7.0.0",
