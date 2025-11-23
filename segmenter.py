@@ -510,8 +510,9 @@ class DJMixSegmenter:
         # Convert M4A/MP4 to AAC if needed
         processed_filepath = self.convert_to_aac(filepath)
 
-        print(f"Loading audio: {processed_filepath}", file=sys.stderr)
-        y, sr = self.load_audio(processed_filepath)
+        with tqdm(total=1, desc="Loading audio", disable=False, file=sys.stderr) as pbar:
+            y, sr = self.load_audio(processed_filepath)
+            pbar.update(1)
 
         duration = librosa.get_duration(y=y, sr=sr)
         print(f"Duration: {duration:.1f} seconds", file=sys.stderr)
@@ -641,6 +642,7 @@ def segment_mix(
     output_filepath: str | None = None,
     sensitivity: float = 0.5,
     tracklist: Optional[List[Track]] = None,
+    recognize_tracks: bool = False,
 ) -> str:
     """
     Segment a DJ mix and generate a CUE sheet.
@@ -650,6 +652,7 @@ def segment_mix(
         output_filepath: Path to save the CUE sheet (optional)
         sensitivity: Detection sensitivity (0.0-1.0, default 0.5)
         tracklist: Optional tracklist to guide segmentation
+        recognize_tracks: Whether to use music recognition to identify tracks
 
     Returns:
         CUE sheet content as string
@@ -657,6 +660,65 @@ def segment_mix(
     # Analyze the mix (returns boundaries and processed filepath)
     segmenter = DJMixSegmenter()
     boundaries, processed_filepath = segmenter.analyze_mix(audio_filepath, sensitivity, tracklist)
+
+    # Recognize tracks if requested
+    recognized_tracklist = None
+    if recognize_tracks:
+        try:
+            from music_recognizer import MusicRecognizer, RecognitionResult
+
+            recognizer = MusicRecognizer()
+            recognized_tracklist = []
+
+            print("\nRecognizing tracks...", file=sys.stderr)
+
+            # Create list of boundaries with start of mix (0.0)
+            all_boundaries = [0.0] + boundaries
+
+            for i in range(len(all_boundaries) - 1):
+                start_time = all_boundaries[i]
+                end_time = all_boundaries[i + 1]
+                track_num = i + 1
+
+                print(f"\nTrack {track_num}: {start_time:.1f}s - {end_time:.1f}s", file=sys.stderr)
+
+                result = recognizer.extract_and_recognize_segment(
+                    processed_filepath, start_time, end_time, track_num
+                )
+
+                if result and tracklist:
+                    # Try to match with provided tracklist
+                    matched_num = MusicRecognizer.match_with_tracklist(result, tracklist)
+                    if matched_num and matched_num <= len(tracklist):
+                        # Use tracklist info but keep recognition confidence
+                        track = tracklist[matched_num - 1]
+                        result.artist = track.artist
+                        result.title = track.title
+                        result.source = "tracklist+acoustid"
+
+                if result:
+                    recognized_tracklist.append(result)
+                    print(f"  ✓ {result}", file=sys.stderr)
+                else:
+                    print(f"  ✗ No match found", file=sys.stderr)
+
+            # Convert RecognitionResult objects to Track objects for CUE generation
+            if recognized_tracklist:
+                from tracklist_parser import Track as TrackObj
+                tracklist = []
+                for r in recognized_tracklist:
+                    tracklist.append(TrackObj(
+                        number=r.track_number,
+                        artist=r.artist,
+                        title=r.title,
+                        timestamp=None
+                    ))
+
+        except ImportError as e:
+            print(f"Warning: Music recognition not available: {e}", file=sys.stderr)
+            print("Install with: pip install pyacoustid", file=sys.stderr)
+        except Exception as e:
+            print(f"Warning: Music recognition failed: {e}", file=sys.stderr)
 
     # Generate CUE sheet
     generator = CueSheetGenerator()
@@ -711,6 +773,11 @@ Note:
         default=0.5,
         help="Detection sensitivity (0.0-1.0, default 0.5)",
     )
+    parser.add_argument(
+        "--recognize",
+        action="store_true",
+        help="Use music recognition to identify tracks (requires pyacoustid)",
+    )
 
     args = parser.parse_args()
 
@@ -720,7 +787,7 @@ Note:
         sys.exit(1)
 
     try:
-        segment_mix(args.audio_file, args.output, args.sensitivity)
+        segment_mix(args.audio_file, args.output, args.sensitivity, recognize_tracks=args.recognize)
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
