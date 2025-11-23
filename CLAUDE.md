@@ -20,12 +20,15 @@
    - `.github/workflows/ci.yml` automatically verifies version consistency
    - Checks that `tagger` script and `setup.py` have matching versions
 
-3. **Release Process**
+3. **Release Process (CRITICAL: All steps are REQUIRED)**
    - Update version in BOTH `tagger` and `setup.py`
    - Commit and push to main
    - Create new tag: `git tag vX.Y.Z && git push origin vX.Y.Z`
-   - Update Homebrew formula (`tagger.rb`) with new tag and SHA256
-   - Create GitHub release
+   - **REQUIRED: Update Homebrew formula (`tagger.rb`)**
+     - Update URL to new tag
+     - Calculate and update SHA256: `curl -sL <URL> | shasum -a 256`
+     - Commit and push formula update
+   - Create GitHub release with release notes
 
 ## Homebrew Formula Testing
 
