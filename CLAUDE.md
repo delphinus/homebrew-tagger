@@ -45,3 +45,27 @@
 - `feature/*`: New features (e.g., music recognition)
 - `fix/*`: Bug fixes (e.g., version corrections)
 - Always create PRs for review before merging to main
+
+## Development Workflow
+
+1. **Branch Creation**
+   - Always create new branches from the latest default branch (main)
+   - Pull latest changes before creating fix/feature branches
+   - Example: `git checkout main && git pull && git checkout -b fix/issue-name`
+
+2. **Pre-Push Testing**
+   - Test locally as much as possible before pushing
+   - Eliminate bugs locally to reduce CI failures
+   - Run linting, type checking, and tests locally when available
+
+3. **CI Monitoring**
+   - Monitor CI checks every 30 seconds after pushing
+   - Continue monitoring until all checks complete
+   - Do not abandon PRs with pending CI checks
+   - Use `gh pr checks <PR#> --watch` or periodic polling
+
+4. **Post-CI Workflow**
+   - After all CI checks pass: merge the PR
+   - Create release if version was bumped
+   - Update release page with release notes
+   - Clean up feature branch after merge
