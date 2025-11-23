@@ -788,9 +788,26 @@ Examples:
   # Adjust sensitivity (0.0-1.0, default 0.5)
   python segmenter.py mix.mp3 --sensitivity 0.7
 
-Note:
-  Higher sensitivity values will detect more boundaries (more tracks).
-  Lower sensitivity values will detect fewer boundaries (fewer tracks).
+  # Use tracklist for track count guidance
+  python segmenter.py mix.mp3 --tracklist tracklist.txt
+
+Sensitivity Parameter:
+  The --sensitivity parameter controls boundary detection (range: 0.0-1.0, default: 0.5).
+
+  How it works:
+  - Converts to detection threshold: threshold = 0.9 - (sensitivity × 0.6)
+  - sensitivity 0.0 → threshold 0.9 (very strict, fewer boundaries)
+  - sensitivity 0.5 → threshold 0.6 (balanced, default)
+  - sensitivity 1.0 → threshold 0.3 (very loose, more boundaries)
+
+  When to adjust:
+  - Too few tracks detected → increase sensitivity (e.g., 0.7-0.8)
+  - Too many false boundaries → decrease sensitivity (e.g., 0.3-0.4)
+
+  Important notes:
+  - Minimum 60 seconds between boundaries (prevents too-close tracks)
+  - Ignored when tracklist is provided (uses expected track count instead)
+  - Works best for mixes with clear transitions
         """,
     )
 
@@ -805,7 +822,7 @@ Note:
         "--sensitivity",
         type=float,
         default=0.5,
-        help="Detection sensitivity (0.0-1.0, default 0.5)",
+        help="Detection sensitivity: 0.0 (strict, fewer boundaries) to 1.0 (loose, more boundaries). Default: 0.5. Ignored when tracklist is provided.",
     )
     parser.add_argument(
         "--recognize",
