@@ -134,7 +134,19 @@ class DJMixSegmenter:
             Tuple of (audio data, sample rate)
         """
         try:
-            y, sr = librosa.load(filepath, sr=None, mono=True)
+            import warnings
+            # Suppress librosa warnings about PySoundFile fallback to audioread
+            # This is expected behavior for certain formats (e.g., m4a)
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", category=UserWarning, module="librosa")
+                warnings.filterwarnings("ignore", category=FutureWarning, module="librosa")
+                y, sr = librosa.load(filepath, sr=None, mono=True)
+
+            # Show a user-friendly message for formats that use audioread
+            file_ext = Path(filepath).suffix.lower()
+            if file_ext in ['.m4a', '.aac']:
+                print(f"Note: Loading {file_ext} file using audioread backend (this is normal)", file=sys.stderr)
+
             return y, sr
         except Exception as e:
             raise RuntimeError(f"Failed to load audio file: {e}")

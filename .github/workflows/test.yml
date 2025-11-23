@@ -52,8 +52,61 @@ jobs:
       env:
         CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
+  homebrew-test:
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install tagger via Homebrew
+      run: |
+        brew install --build-from-source --formula ./tagger.rb
+
+    - name: Verify tagger installation
+      run: |
+        tagger --version
+        which tagger
+
+    - name: Check installed Python modules
+      run: |
+        echo "=== Checking installed modules in Homebrew virtualenv ==="
+        # Find the tagger installation directory
+        TAGGER_CELLAR=$(brew --prefix tagger)
+        TAGGER_VENV="${TAGGER_CELLAR}/libexec"
+
+        if [ -f "${TAGGER_VENV}/bin/python" ]; then
+          echo "Tagger installation: ${TAGGER_CELLAR}"
+          echo "Python virtualenv: ${TAGGER_VENV}"
+          ${TAGGER_VENV}/bin/python -c "import sys; print('Python version:', sys.version)"
+          echo ""
+          echo "=== Installed packages ==="
+          ${TAGGER_VENV}/bin/pip list
+          echo ""
+          echo "=== Checking critical dependencies ==="
+          ${TAGGER_VENV}/bin/python -c "import librosa; print('✓ librosa:', librosa.__version__)"
+          ${TAGGER_VENV}/bin/python -c "import numpy; print('✓ numpy:', numpy.__version__)"
+          ${TAGGER_VENV}/bin/python -c "import tqdm; print('✓ tqdm:', tqdm.__version__)"
+          ${TAGGER_VENV}/bin/python -c "import mutagen; print('✓ mutagen: installed')"
+          ${TAGGER_VENV}/bin/python -c "import pydantic; print('✓ pydantic:', pydantic.__version__)"
+          ${TAGGER_VENV}/bin/python -c "import yaml; print('✓ pyyaml: installed')"
+          echo ""
+          echo "=== Segmentation dependencies ==="
+          ${TAGGER_VENV}/bin/python -c "import soundfile; print('✓ soundfile:', soundfile.__version__)"
+          ${TAGGER_VENV}/bin/python -c "import scipy; print('✓ scipy:', scipy.__version__)"
+          ${TAGGER_VENV}/bin/python -c "import sklearn; print('✓ scikit-learn:', sklearn.__version__)"
+          ${TAGGER_VENV}/bin/python -c "import numba; print('✓ numba:', numba.__version__)"
+          echo ""
+          echo "=== All required modules are installed correctly ==="
+        else
+          echo "Error: Could not find tagger virtualenv at ${TAGGER_VENV}"
+          exit 1
+        fi
+
+    - name: Test basic tagger functionality
+      run: |
+        tagger --help
+
   all-checks-passed:
-    needs: test
+    needs: [test, homebrew-test]
     runs-on: ubuntu-latest
     steps:
       - name: All checks passed
