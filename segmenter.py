@@ -118,6 +118,52 @@ class Spinner:
         if self.thread:
             self.thread.join(timeout=0.5)
 
+
+# Helper function for track matching/similarity
+def calculate_string_similarity(str1: Optional[str], str2: Optional[str]) -> float:
+    """
+    Calculate similarity between two strings using a simple word-based approach.
+
+    Returns a value between 0.0 (completely different) and 1.0 (identical).
+    """
+    if str1 is None or str2 is None:
+        return 0.0
+
+    # Normalize strings: lowercase and split into words
+    words1 = set(str1.lower().split())
+    words2 = set(str2.lower().split())
+
+    if not words1 and not words2:
+        return 1.0  # Both empty
+    if not words1 or not words2:
+        return 0.0  # One empty
+
+    # Calculate Jaccard similarity (intersection over union)
+    intersection = words1 & words2
+    union = words1 | words2
+
+    return len(intersection) / len(union) if union else 0.0
+
+
+def calculate_track_match_score(
+    recognized_artist: Optional[str],
+    recognized_title: Optional[str],
+    tracklist_artist: Optional[str],
+    tracklist_title: Optional[str],
+) -> float:
+    """
+    Calculate overall match score between recognized track and tracklist entry.
+
+    Returns a value between 0.0 (no match) and 1.0 (perfect match).
+    """
+    artist_similarity = calculate_string_similarity(recognized_artist, tracklist_artist)
+    title_similarity = calculate_string_similarity(recognized_title, tracklist_title)
+
+    # Weight title more heavily (0.6) than artist (0.4)
+    # since titles are more specific
+    return (artist_similarity * 0.4) + (title_similarity * 0.6)
+
+
 # Monkey-patch sklearn.neighbors.NearestNeighbors to use all CPU cores
 # This makes librosa's recurrence_matrix use parallel processing
 _original_nn_init = sklearn.neighbors.NearestNeighbors.__init__
@@ -676,6 +722,7 @@ def segment_mix(
     sensitivity: float = 0.5,
     tracklist: Optional[List[Track]] = None,
     recognize_tracks: bool = False,
+    verify_boundaries: bool = False,
 ) -> str:
     """
     Segment a DJ mix and generate a CUE sheet.
@@ -686,13 +733,38 @@ def segment_mix(
         sensitivity: Detection sensitivity (0.0-1.0, default 0.5)
         tracklist: Optional tracklist to guide segmentation
         recognize_tracks: Whether to use music recognition to identify tracks
+        verify_boundaries: If True, verify boundaries using music recognition and adjust if needed
 
     Returns:
         CUE sheet content as string
     """
     # Analyze the mix (returns boundaries and processed filepath)
     segmenter = DJMixSegmenter()
-    boundaries, processed_filepath = segmenter.analyze_mix(audio_filepath, sensitivity, tracklist)
+
+    # Convert M4A/MP4 to AAC if needed
+    processed_filepath = segmenter.convert_to_aac(audio_filepath)
+
+    # Load audio for boundary detection and potential retries
+    with Spinner("Loading audio"):
+        y, sr = segmenter.load_audio(processed_filepath)
+
+    duration = librosa.get_duration(y=y, sr=sr)
+    print(f"Duration: {duration:.1f} seconds", file=sys.stderr)
+
+    # If tracklist has timestamps, use them directly
+    if tracklist and any(t.timestamp is not None for t in tracklist):
+        print("Using timestamps from tracklist", file=sys.stderr)
+        boundaries = [t.timestamp for t in tracklist[1:] if t.timestamp is not None]
+        print(f"Found {len(boundaries)} boundaries from tracklist", file=sys.stderr)
+    else:
+        # Otherwise, detect boundaries with optional track count constraint
+        expected_count = len(tracklist) if tracklist else None
+        boundaries = segmenter.detect_boundaries(y, sr, sensitivity, expected_count)
+
+    # If verify_boundaries is True and tracklist is provided, force recognition
+    if verify_boundaries and tracklist and not recognize_tracks:
+        print("Note: Boundary verification requires music recognition, enabling automatically...", file=sys.stderr)
+        recognize_tracks = True
 
     # Recognize tracks if requested
     recognized_tracklist = None
@@ -735,6 +807,238 @@ def segment_mix(
                     print(f"  ✓ {result}", file=sys.stderr)
                 else:
                     print(f"  ✗ No match found", file=sys.stderr)
+
+            # Verify boundaries if requested and tracklist is provided
+            if verify_boundaries and tracklist and recognized_tracklist:
+                print("\nVerifying boundaries against tracklist...", file=sys.stderr)
+
+                # Calculate match scores for each recognized track
+                # Try matching with current position and nearby positions (±2 tracks)
+                mismatches = []
+
+                for i, result in enumerate(recognized_tracklist):
+                    track_num = result.track_number
+                    best_score = 0.0
+                    best_match_pos = track_num
+
+                    # Check current position and ±2 positions in tracklist
+                    search_range = range(
+                        max(1, track_num - 2),
+                        min(len(tracklist) + 1, track_num + 3)
+                    )
+
+                    for pos in search_range:
+                        tracklist_track = tracklist[pos - 1]
+                        score = calculate_track_match_score(
+                            result.artist,
+                            result.title,
+                            tracklist_track.artist,
+                            tracklist_track.title
+                        )
+
+                        if score > best_score:
+                            best_score = score
+                            best_match_pos = pos
+
+                    # Consider it a mismatch if best score is low (< 0.5)
+                    # or if best match is not at expected position
+                    if best_score < 0.5:
+                        mismatches.append({
+                            'track_num': track_num,
+                            'recognized': f"{result.artist} - {result.title}",
+                            'expected': f"{tracklist[track_num - 1].artist} - {tracklist[track_num - 1].title}",
+                            'score': best_score,
+                            'issue': 'low_confidence'
+                        })
+                    elif best_match_pos != track_num:
+                        offset = best_match_pos - track_num
+                        mismatches.append({
+                            'track_num': track_num,
+                            'recognized': f"{result.artist} - {result.title}",
+                            'expected': f"{tracklist[track_num - 1].artist} - {tracklist[track_num - 1].title}",
+                            'best_match': f"{tracklist[best_match_pos - 1].artist} - {tracklist[best_match_pos - 1].title}",
+                            'offset': offset,
+                            'score': best_score,
+                            'issue': 'position_mismatch'
+                        })
+
+                # If significant mismatches found, show them and prompt user
+                if mismatches:
+                    mismatch_rate = len(mismatches) / len(recognized_tracklist)
+
+                    print(f"\n⚠️  Found {len(mismatches)} mismatch(es) out of {len(recognized_tracklist)} tracks ({mismatch_rate*100:.1f}%)", file=sys.stderr)
+                    print("\nMismatches detected:", file=sys.stderr)
+
+                    for m in mismatches:
+                        print(f"\n  Track {m['track_num']}:", file=sys.stderr)
+                        print(f"    Recognized: {m['recognized']}", file=sys.stderr)
+                        print(f"    Expected:   {m['expected']}", file=sys.stderr)
+
+                        if m['issue'] == 'position_mismatch':
+                            offset_str = f"+{m['offset']}" if m['offset'] > 0 else str(m['offset'])
+                            print(f"    Best match: {m['best_match']} (offset: {offset_str})", file=sys.stderr)
+                            print(f"    → Boundary may be shifted {'forward' if m['offset'] > 0 else 'backward'}", file=sys.stderr)
+                        else:
+                            print(f"    Match score: {m['score']:.2f} (low confidence)", file=sys.stderr)
+
+                    # Interactive prompt for retry
+                    print("\n" + "="*60, file=sys.stderr)
+                    print("What would you like to do?", file=sys.stderr)
+                    print("  1. Continue with current boundaries (default)", file=sys.stderr)
+                    print("  2. Adjust sensitivity and retry boundary detection", file=sys.stderr)
+                    print("  3. Abort", file=sys.stderr)
+                    print("="*60, file=sys.stderr)
+
+                    max_retries = 3
+                    retry_count = 0
+
+                    while retry_count < max_retries:
+                        try:
+                            choice = input("\nEnter your choice (1/2/3) [1]: ").strip()
+
+                            if choice == "" or choice == "1":
+                                # Continue with current boundaries
+                                print("Continuing with current boundaries...", file=sys.stderr)
+                                break
+                            elif choice == "2":
+                                # Retry with new sensitivity
+                                new_sensitivity_str = input(f"Enter new sensitivity value (0.0-1.0) [current: {sensitivity}]: ").strip()
+
+                                if new_sensitivity_str == "":
+                                    print("No sensitivity change, continuing...", file=sys.stderr)
+                                    break
+
+                                try:
+                                    new_sensitivity = float(new_sensitivity_str)
+                                    if not 0.0 <= new_sensitivity <= 1.0:
+                                        print("Error: Sensitivity must be between 0.0 and 1.0", file=sys.stderr)
+                                        continue
+
+                                    # Re-detect boundaries with new sensitivity
+                                    print(f"\nRe-detecting boundaries with sensitivity={new_sensitivity}...", file=sys.stderr)
+                                    boundaries = segmenter.detect_boundaries(y, sr, new_sensitivity, len(tracklist))
+
+                                    # Re-run recognition on new boundaries
+                                    print("\nRe-recognizing tracks with new boundaries...", file=sys.stderr)
+                                    recognized_tracklist = []
+                                    all_boundaries = [0.0] + boundaries
+
+                                    for i in range(len(all_boundaries) - 1):
+                                        start_time = all_boundaries[i]
+                                        end_time = all_boundaries[i + 1]
+                                        track_num = i + 1
+
+                                        print(f"\nTrack {track_num}: {start_time:.1f}s - {end_time:.1f}s", file=sys.stderr)
+
+                                        with Spinner(f"Recognizing track {track_num}"):
+                                            result = recognizer.extract_and_recognize_segment(
+                                                processed_filepath, start_time, end_time, track_num
+                                            )
+
+                                            if result and tracklist:
+                                                matched_num = MusicRecognizer.match_with_tracklist(result, tracklist)
+                                                if matched_num and matched_num <= len(tracklist):
+                                                    track = tracklist[matched_num - 1]
+                                                    result.artist = track.artist
+                                                    result.title = track.title
+                                                    result.source = "tracklist+acoustid"
+
+                                            if result:
+                                                recognized_tracklist.append(result)
+                                                print(f"  ✓ {result}", file=sys.stderr)
+                                            else:
+                                                print(f"  ✗ No match found", file=sys.stderr)
+
+                                    # Update sensitivity for next iteration
+                                    sensitivity = new_sensitivity
+                                    retry_count += 1
+
+                                    # Re-check for mismatches (loop will continue)
+                                    # Reset mismatches list and re-verify
+                                    mismatches = []
+                                    for i, result in enumerate(recognized_tracklist):
+                                        track_num = result.track_number
+                                        best_score = 0.0
+                                        best_match_pos = track_num
+
+                                        search_range = range(
+                                            max(1, track_num - 2),
+                                            min(len(tracklist) + 1, track_num + 3)
+                                        )
+
+                                        for pos in search_range:
+                                            tracklist_track = tracklist[pos - 1]
+                                            score = calculate_track_match_score(
+                                                result.artist,
+                                                result.title,
+                                                tracklist_track.artist,
+                                                tracklist_track.title
+                                            )
+
+                                            if score > best_score:
+                                                best_score = score
+                                                best_match_pos = pos
+
+                                        if best_score < 0.5:
+                                            mismatches.append({
+                                                'track_num': track_num,
+                                                'recognized': f"{result.artist} - {result.title}",
+                                                'expected': f"{tracklist[track_num - 1].artist} - {tracklist[track_num - 1].title}",
+                                                'score': best_score,
+                                                'issue': 'low_confidence'
+                                            })
+                                        elif best_match_pos != track_num:
+                                            offset = best_match_pos - track_num
+                                            mismatches.append({
+                                                'track_num': track_num,
+                                                'recognized': f"{result.artist} - {result.title}",
+                                                'expected': f"{tracklist[track_num - 1].artist} - {tracklist[track_num - 1].title}",
+                                                'best_match': f"{tracklist[best_match_pos - 1].artist} - {tracklist[best_match_pos - 1].title}",
+                                                'offset': offset,
+                                                'score': best_score,
+                                                'issue': 'position_mismatch'
+                                            })
+
+                                    if not mismatches:
+                                        print("\n✓ All tracks now match the tracklist!", file=sys.stderr)
+                                        break
+                                    else:
+                                        print(f"\n⚠️  Still found {len(mismatches)} mismatch(es)", file=sys.stderr)
+                                        if retry_count >= max_retries:
+                                            print(f"Maximum retries ({max_retries}) reached.", file=sys.stderr)
+                                            break
+                                        # Show mismatches again and continue loop
+                                        for m in mismatches:
+                                            print(f"\n  Track {m['track_num']}:", file=sys.stderr)
+                                            print(f"    Recognized: {m['recognized']}", file=sys.stderr)
+                                            print(f"    Expected:   {m['expected']}", file=sys.stderr)
+                                            if m['issue'] == 'position_mismatch':
+                                                offset_str = f"+{m['offset']}" if m['offset'] > 0 else str(m['offset'])
+                                                print(f"    Best match: {m['best_match']} (offset: {offset_str})", file=sys.stderr)
+                                        continue
+
+                                except ValueError:
+                                    print("Error: Invalid sensitivity value. Please enter a number between 0.0 and 1.0", file=sys.stderr)
+                                    continue
+
+                            elif choice == "3":
+                                # Abort
+                                print("Aborting...", file=sys.stderr)
+                                sys.exit(0)
+                            else:
+                                print("Invalid choice. Please enter 1, 2, or 3.", file=sys.stderr)
+                                continue
+
+                        except EOFError:
+                            # Handle Ctrl+D
+                            print("\nAborted by user", file=sys.stderr)
+                            sys.exit(0)
+                        except KeyboardInterrupt:
+                            # Handle Ctrl+C
+                            print("\nAborted by user", file=sys.stderr)
+                            sys.exit(0)
+                else:
+                    print("✓ All tracks match the tracklist!", file=sys.stderr)
 
             # Convert RecognitionResult objects to Track objects for CUE generation
             if recognized_tracklist:

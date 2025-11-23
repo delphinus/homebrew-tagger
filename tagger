@@ -1342,6 +1342,18 @@ Note:
         help="Read tracklist from clipboard",
     )
 
+    parser.add_argument(
+        "--verify-boundaries",
+        action="store_true",
+        help="Verify detected boundaries using music recognition (requires --tracklist and --recognize or implicit recognition)",
+    )
+
+    parser.add_argument(
+        "--recognize",
+        action="store_true",
+        help="Use music recognition to identify tracks in DJ mix (requires pyacoustid)",
+    )
+
     args = parser.parse_args()
 
     # Segment mode (DJ mix analysis)
@@ -1434,7 +1446,14 @@ Note:
             output_path = Path(args.segment).with_suffix(".cue")
 
         try:
-            segment_mix(args.segment, str(output_path), args.sensitivity, tracklist)
+            segment_mix(
+                args.segment,
+                str(output_path),
+                args.sensitivity,
+                tracklist,
+                recognize_tracks=args.recognize,
+                verify_boundaries=args.verify_boundaries
+            )
         except Exception as e:
             print(f"Error: {e}", file=sys.stderr)
             sys.exit(1)
