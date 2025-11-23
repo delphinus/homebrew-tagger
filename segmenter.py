@@ -135,17 +135,29 @@ class DJMixSegmenter:
         """
         try:
             import warnings
-            # Suppress all warnings from librosa and soundfile about format conversion
-            # This is expected behavior for certain formats (e.g., m4a) and doesn't affect functionality
-            with warnings.catch_warnings():
-                warnings.filterwarnings("ignore", category=UserWarning)
-                warnings.filterwarnings("ignore", category=FutureWarning)
-                y, sr = librosa.load(filepath, sr=None, mono=True)
 
-            # Show a user-friendly message for formats that use audioread
+            # Capture warnings to provide user-friendly messages
+            warning_list = []
+            def warning_handler(message, category, filename, lineno, file=None, line=None):
+                warning_list.append((str(message), category.__name__))
+
+            old_showwarning = warnings.showwarning
+            warnings.showwarning = warning_handler
+
+            try:
+                y, sr = librosa.load(filepath, sr=None, mono=True)
+            finally:
+                warnings.showwarning = old_showwarning
+
+            # Show user-friendly messages for any warnings that occurred
             file_ext = Path(filepath).suffix.lower()
-            if file_ext in ['.m4a', '.aac']:
-                print(f"Note: Loading {file_ext} file using audioread backend (this is normal)", file=sys.stderr)
+            for msg, category in warning_list:
+                if "PySoundFile failed" in msg or "audioread" in msg.lower():
+                    if file_ext in ['.m4a', '.aac', '.mp4']:
+                        print(f"Info: Using audioread backend for {file_ext} file (native format not supported by soundfile)", file=sys.stderr)
+                    else:
+                        print(f"Info: Using audioread backend (soundfile couldn't load this file)", file=sys.stderr)
+                    break
 
             return y, sr
         except Exception as e:
