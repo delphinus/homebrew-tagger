@@ -204,3 +204,49 @@ Files that must have matching versions:
 2. Fix the underlying issue (not the test itself, unless the test is wrong)
 3. Re-run tests to verify the fix
 4. Only after all tests pass: proceed with merge
+
+## Documentation Synchronization
+
+**CRITICAL: Keep README and Man Page in Sync**
+
+When making changes that affect user-facing features, command-line options, or behavior:
+
+❌ **FORBIDDEN:**
+- Updating only README or only man page
+- Leaving documentation inconsistent between files
+- Documenting features in one place but not the other
+- Assuming "I'll update the other later"
+
+✓ **REQUIRED:**
+- **ALWAYS update BOTH README.md and man/tagger.1 together**
+- Ensure examples are consistent across both documents
+- Keep option descriptions identical
+- Update version-specific information in both places
+- Verify both files before committing
+
+**Files to synchronize:**
+- `README.md` - User-facing documentation in Markdown
+- `man/tagger.1` - Comprehensive man page in groff format
+
+**When to update both:**
+- Adding new command-line options or flags
+- Changing behavior of existing features
+- Adding new features or modes
+- Modifying examples or usage patterns
+- Updating supported file formats
+- Changing dependencies or requirements
+- Fixing errors or clarifying instructions
+
+**Verification checklist:**
+1. Does README.md reflect the change?
+2. Does man/tagger.1 reflect the change?
+3. Are examples consistent between both?
+4. Are all options documented in both?
+5. Are version numbers updated in both (if applicable)?
+
+**Rationale:**
+- Users read different documentation sources
+- Man pages are the canonical Unix documentation
+- README is often the first thing users see
+- Inconsistent docs cause confusion and support burden
+- Both are installed and distributed with the package
