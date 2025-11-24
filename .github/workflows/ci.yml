@@ -68,16 +68,33 @@ jobs:
         # Extract versions from different sources
         TAGGER_VERSION=$(grep -E '^__version__' tagger | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
         SETUP_VERSION=$(grep -E '^\s+version=' setup.py | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+        MAN_VERSION=$(grep -E '^\.TH TAGGER' man/tagger.1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
 
         echo "tagger script version: ${TAGGER_VERSION}"
         echo "setup.py version: ${SETUP_VERSION}"
+        echo "man page version: ${MAN_VERSION}"
 
-        # Check if versions match
+        # Check if all versions match
+        MISMATCH=0
         if [ "${TAGGER_VERSION}" != "${SETUP_VERSION}" ]; then
-          echo "❌ Version mismatch detected!"
-          echo "tagger script has version ${TAGGER_VERSION}"
-          echo "setup.py has version ${SETUP_VERSION}"
-          echo "Please ensure both files have the same version number."
+          echo "❌ Version mismatch: tagger (${TAGGER_VERSION}) vs setup.py (${SETUP_VERSION})"
+          MISMATCH=1
+        fi
+        if [ "${TAGGER_VERSION}" != "${MAN_VERSION}" ]; then
+          echo "❌ Version mismatch: tagger (${TAGGER_VERSION}) vs man page (${MAN_VERSION})"
+          MISMATCH=1
+        fi
+        if [ "${SETUP_VERSION}" != "${MAN_VERSION}" ]; then
+          echo "❌ Version mismatch: setup.py (${SETUP_VERSION}) vs man page (${MAN_VERSION})"
+          MISMATCH=1
+        fi
+
+        if [ ${MISMATCH} -eq 1 ]; then
+          echo ""
+          echo "Please ensure all files have the same version number:"
+          echo "  - tagger: __version__ = \"X.Y.Z\""
+          echo "  - setup.py: version=\"X.Y.Z\""
+          echo "  - man/tagger.1: .TH TAGGER 1 \"...\" \"tagger X.Y.Z\" \"...\""
           exit 1
         fi
 
