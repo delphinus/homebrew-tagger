@@ -272,6 +272,11 @@ class Tagger < Formula
 
     # Install man page
     man1.install "man/tagger.1"
+
+    # Install shell completions
+    bash_completion.install "completions/tagger.bash" => "tagger"
+    zsh_completion.install "completions/_tagger"
+    fish_completion.install "completions/tagger.fish"
   end
 
   test do

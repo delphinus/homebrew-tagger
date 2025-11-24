@@ -1,0 +1,38 @@
+#compdef tagger
+# Zsh completion for tagger
+# This file is automatically installed by Homebrew
+
+_tagger() {
+    local context state state_descr line
+    typeset -A opt_args
+
+    _arguments -C \
+        '(-e --execute)'{-e,--execute}'[Execute changes (default is dry-run mode)]' \
+        '(-o --output)'{-o,--output}'[Output YAML file name]:output file:_files -g "*.{yaml,yml,cue}(-.)"' \
+        '(-v --version)'{-v,--version}'[Display version information]' \
+        '(-h --help)'{-h,--help}'[Display help message]' \
+        '--no-color[Disable colored output]' \
+        '--prefer-filename[Prefer metadata from filenames over embedded tags]' \
+        '--segment[Segment a DJ mix and generate CUE sheet]:audio file:_files -g "*.{mp3,m4a,aac,wav,flac,ogg}(-.)"' \
+        '--sensitivity[Detection sensitivity (0.0-1.0)]:sensitivity value' \
+        '--tracklist[Tracklist source (clipboard/file/URL)]:tracklist source:->tracklist' \
+        '--tracklist-file[Read tracklist from text file]:text file:_files -g "*.{txt,md}(-.)"' \
+        '--tracklist-clipboard[Read tracklist from clipboard]' \
+        '--recognize[Use music recognition to identify tracks]' \
+        '--verify-boundaries[Verify detected boundaries using music recognition]' \
+        '*:YAML file:_files -g "*.{yaml,yml}(-.)"'
+
+    case $state in
+        tracklist)
+            if [[ $words[CURRENT] == http* ]]; then
+                _message 'URL'
+            elif [[ $words[CURRENT] == "clipboard" ]]; then
+                compadd clipboard
+            else
+                _files -g "*.{txt,md}(-.)"
+            fi
+            ;;
+    esac
+}
+
+_tagger "$@"
