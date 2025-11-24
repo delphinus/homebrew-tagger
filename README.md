@@ -27,6 +27,16 @@ brew tap delphinus/tagger
 brew install tagger
 ```
 
+**Shell Completion**: When installed via Homebrew, shell completions are automatically set up for Bash, Zsh, and Fish. Completions provide intelligent tab-completion for:
+- Command-line options (`--execute`, `--segment`, etc.)
+- File types (YAML files, audio files, CUE sheets)
+- Tracklist sources (clipboard, text files, URLs)
+
+To enable completions:
+- **Bash**: Completions are automatically loaded if you have bash-completion installed
+- **Zsh**: Completions are automatically loaded (ensure `compinit` is called in your `.zshrc`)
+- **Fish**: Completions are automatically loaded
+
 ### Using pip
 
 ```bash
