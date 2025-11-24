@@ -13,8 +13,9 @@
 1. **Version Consistency**
    - `tagger` script: `__version__` variable (line 9)
    - `setup.py`: `version` parameter (line 13)
+   - `man/tagger.1`: Man page header (line 1, `.TH` directive)
    - `tagger.rb`: Homebrew formula URL tag
-   - All three must match for releases
+   - All four must match for releases
 
 2. **CI Version Check**
    - `.github/workflows/ci.yml` automatically verifies version consistency
@@ -83,6 +84,7 @@
 Files that must have matching versions:
 - `tagger` script: `__version__` variable (line 9)
 - `setup.py`: `version` parameter (line 13)
+- `man/tagger.1`: Man page `.TH` header (line 1)
 - Git tag: `vX.Y.Z` (exact match)
 - Homebrew formula `tagger.rb`: URL tag and SHA256
 
