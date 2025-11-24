@@ -164,13 +164,14 @@ def calculate_track_match_score(
     return (artist_similarity * 0.4) + (title_similarity * 0.6)
 
 
-# Monkey-patch sklearn.neighbors.NearestNeighbors to use all CPU cores
-# This makes librosa's recurrence_matrix use parallel processing
+# Monkey-patch sklearn.neighbors.NearestNeighbors to use all CPU cores by default
+# This makes librosa's recurrence_matrix use parallel processing for single-file processing
+# When called from multiprocessing workers, n_jobs should be explicitly set to 1
 _original_nn_init = sklearn.neighbors.NearestNeighbors.__init__
 
 
 def _parallel_nn_init(self, n_neighbors=5, *, radius=1.0, algorithm="auto", leaf_size=30, metric="minkowski", p=2, metric_params=None, n_jobs=None, **kwargs):
-    """Patched __init__ that defaults n_jobs to all CPU cores"""
+    """Patched __init__ that defaults n_jobs to all CPU cores when n_jobs is None"""
     if n_jobs is None:
         n_jobs = cpu_count
     _original_nn_init(self, n_neighbors=n_neighbors, radius=radius, algorithm=algorithm, leaf_size=leaf_size, metric=metric, p=p, metric_params=metric_params, n_jobs=n_jobs, **kwargs)
@@ -354,13 +355,20 @@ class DJMixSegmenter:
         """
         chunk_index, chunk, sr, start_idx, total_chunks = chunk_data
 
+        # Disable sklearn parallelization within multiprocessing workers
+        # This prevents the "Loky-backed parallel loops cannot be called in multiprocessing" warning
+        # Since we're already parallelizing at the chunk level, sklearn should use n_jobs=1
+        import os
+        os.environ["LOKY_MAX_CPU_COUNT"] = "1"
+
         # Extract chroma for this chunk
         chroma = librosa.feature.chroma_cqt(y=chunk, sr=sr, hop_length=self.hop_length)
 
         # Compute similarity matrix for this chunk
         # Use sparse matrix with limited k-neighbors to reduce memory usage
+        # n_jobs=1 to avoid nested parallelization (we're already in a multiprocessing worker)
         chroma_similarity = librosa.segment.recurrence_matrix(
-            chroma, k=100, mode="affinity", metric="cosine", width=9, sparse=True
+            chroma, k=100, mode="affinity", metric="cosine", width=9, sparse=True, n_jobs=1
         )
 
         # Compute novelty curve
