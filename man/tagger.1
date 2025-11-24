@@ -846,6 +846,49 @@ Invalid track/disc numbers (must be positive)
 .RS
 Sparse matrix eigenvalue computation failed (very rare). Workaround: Use smaller chunk size or reduce k parameter in code.
 .RE
+.SH SHELL COMPLETION
+.PP
+When installed via Homebrew, shell completions are automatically set up for Bash, Zsh, and Fish shells.
+Completions provide intelligent tab-completion for command-line options, file types, and tracklist sources.
+.PP
+.B Bash
+.RS
+Completions are automatically loaded if bash-completion is installed via Homebrew.
+.RE
+.PP
+.B Zsh
+.RS
+Completions are automatically loaded. Ensure
+.I compinit
+is called in your
+.I .zshrc
+configuration file.
+.RE
+.PP
+.B Fish
+.RS
+Completions are automatically loaded by the Fish shell.
+.RE
+.PP
+.B Features
+.RS
+.IP \(bu 3
+Command-line option completion (--execute, --segment, --sensitivity, etc.)
+.IP \(bu 3
+Context-aware file completion:
+.RS
+.IP \(bu 3
+YAML files for positional arguments and -o/--output
+.IP \(bu 3
+Audio files (mp3, m4a, aac, wav, flac, ogg) for --segment
+.IP \(bu 3
+CUE sheets for -o/--output in segmentation mode
+.IP \(bu 3
+Text files (txt, md) for --tracklist-file
+.RE
+.IP \(bu 3
+Special completions for --tracklist (clipboard, files, URLs)
+.RE
 .SH BUGS
 .PP
 Report bugs at: https://github.com/delphinus/homebrew-tagger/issues

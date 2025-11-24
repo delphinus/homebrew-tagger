@@ -250,3 +250,120 @@ When making changes that affect user-facing features, command-line options, or b
 - README is often the first thing users see
 - Inconsistent docs cause confusion and support burden
 - Both are installed and distributed with the package
+
+## Automatic Release Workflow
+
+**CRITICAL: Automate PR to Release Process**
+
+When a PR is merged to main, automatically proceed through the entire release workflow unless specifically instructed otherwise.
+
+✓ **REQUIRED: Complete Release Process**
+1. Merge PR after all CI tests pass
+2. Determine next version number (check latest release, increment appropriately)
+3. Create git tag with version number (e.g., `v1.15.2`)
+4. Push tag to GitHub
+5. Create GitHub release with tag
+6. Update Homebrew formula with new SHA256 if needed
+7. Report completion to user
+
+❌ **FORBIDDEN:**
+- Waiting for user instruction to proceed with release
+- Stopping after PR merge without releasing
+- Skipping version tagging or release creation
+- Asking "should I create a release?" (unless user explicitly said not to)
+
+**When to skip automatic release:**
+- User explicitly says "don't release yet"
+- User says "merge but wait on release"
+- PR is marked as work-in-progress or draft
+- Commit message contains `[skip release]` or `[no release]`
+
+**Release workflow steps:**
+```bash
+# 1. After PR merge, get latest version
+gh release list --limit 1
+
+# 2. Determine next version (patch/minor/major)
+# Based on commit messages and changes
+
+# 3. Create and push tag
+git tag v1.X.Y
+git push origin v1.X.Y
+
+# 4. Create GitHub release
+gh release create v1.X.Y --generate-notes
+
+# 5. Update formula if needed (for Homebrew packages)
+```
+
+**Proactive status reporting:**
+- Report when PR is merged
+- Report when tag is created
+- Report when release is published
+- Don't wait to be asked "what's the status?"
+
+## CI Monitoring Strategy
+
+**CRITICAL: Reliable Continuous Monitoring**
+
+Use continuous monitoring loops instead of one-time delayed checks for CI status.
+
+✓ **REQUIRED: Continuous Loop Monitoring**
+```bash
+# Good: Continuous monitoring until tests complete
+while true; do
+    sleep 30
+    gh pr checks <PR_NUMBER> || true
+done
+```
+
+❌ **FORBIDDEN: One-Time Delayed Checks**
+```bash
+# Bad: Single check after delay (often fails)
+sleep 120 && gh pr checks <PR_NUMBER>
+
+# Bad: Using --watch (unreliable in background)
+gh pr checks <PR_NUMBER> --watch
+```
+
+**Why continuous loops are better:**
+- Survive temporary network issues
+- Continue monitoring even if one check fails
+- Provide regular status updates
+- Can detect test completion at any time
+- Don't depend on timing assumptions
+
+**Monitoring loop parameters:**
+- `sleep 30`: Check every 30 seconds (good balance)
+- `|| true`: Don't exit loop if check command fails
+- `while true`: Continue until manually stopped or tests complete
+
+**When to stop monitoring:**
+- All tests pass (successful)
+- Any test fails (needs investigation)
+- PR is closed or merged
+- User requests to stop
+
+**Implementation:**
+```bash
+# Start monitoring in background
+while true; do
+    sleep 30
+    STATUS=$(gh pr checks <PR_NUMBER> 2>&1 || true)
+    echo "$STATUS"
+    if echo "$STATUS" | grep -q "All checks passed"; then
+        echo "✓ All tests passed"
+        break
+    fi
+    if echo "$STATUS" | grep -q "Some checks failed"; then
+        echo "✗ Tests failed - investigation needed"
+        break
+    fi
+done
+```
+
+**Rationale:**
+- One-time delayed checks frequently fail due to timing issues
+- CI runs can take variable amounts of time
+- Network hiccups can cause single checks to fail
+- Continuous monitoring is more resilient and reliable
