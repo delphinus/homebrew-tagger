@@ -1,0 +1,868 @@
+.TH TAGGER 1 "November 2025" "tagger 1.15.1" "User Commands"
+.SH NAME
+tagger \- Audio file tag and filename manager with DJ mix segmentation support
+.SH SYNOPSIS
+.B tagger
+[\fB\-e\fR|\fB\-\-execute\fR] [\fB\-o\fR \fIOUTPUT\fR] [\fB\-\-no\-color\fR] [\fB\-\-prefer\-filename\fR] [\fIYAML_FILE\fR]
+.br
+.B tagger
+\fB\-\-segment\fR \fIAUDIO_FILE\fR [\fB\-o\fR \fIOUTPUT\fR] [\fB\-\-sensitivity\fR \fIVALUE\fR] [\fB\-\-recognize\fR]
+.br
+.B tagger
+{\fB\-v\fR|\fB\-\-version\fR}
+.br
+.B tagger
+{\fB\-h\fR|\fB\-\-help\fR}
+.SH DESCRIPTION
+.B tagger
+is an audio file tag and filename manager that supports MP3 and M4A files.
+It provides two main operating modes:
+.PP
+.B Tag Management Mode
+- Generate YAML configuration from audio files, apply tags from YAML, and synchronize filenames with metadata.
+.PP
+.B DJ Mix Segmentation Mode
+- Analyze DJ mixes to detect track boundaries using audio feature analysis, generate CUE sheets compatible with mp3DirectCut, and optionally identify tracks using music recognition (AcoustID/Shazam).
+.SH OPTIONS
+.SS "General Options"
+.TP
+.BR \-e ", " \-\-execute
+Execute changes (default is dry-run mode). Without this flag, tagger will only show what would be changed.
+.TP
+.BR \-o ", " \-\-output " " \fIOUTPUT\fR
+Output YAML file name when generating (default: tagger.yaml). In segmentation mode, specifies the CUE sheet output path (default: same as input with .cue extension).
+.TP
+.BR \-\-no\-color
+Disable colored output. Useful for scripts or non-TTY environments.
+.TP
+.BR \-\-prefer\-filename
+Prefer metadata from filenames over embedded tags when generating YAML (non-interactive mode). Skips the interactive prompt for conflict resolution.
+.TP
+.BR \-v ", " \-\-version
+Display version information and exit.
+.TP
+.BR \-h ", " \-\-help
+Display help message and exit.
+.SS "DJ Mix Segmentation Options"
+.TP
+.BR \-\-segment " " \fIAUDIO_FILE\fR
+Segment a DJ mix and generate CUE sheet. Analyzes audio features to detect track boundaries.
+.TP
+.BR \-\-sensitivity " " \fIVALUE\fR
+Detection sensitivity for DJ mix segmentation (0.0-1.0, default: 0.5).
+.br
+.RS
+.IP \(bu 3
+Lower values (0.0-0.4): Stricter detection, fewer boundaries
+.IP \(bu 3
+Default (0.5): Balanced detection
+.IP \(bu 3
+Higher values (0.6-1.0): More sensitive, more boundaries
+.RE
+.RS
+.PP
+This parameter is ignored when a tracklist is provided, as the expected track count guides detection instead.
+.RE
+.TP
+.BR \-\-tracklist " " \fISOURCE\fR
+Tracklist source for guided segmentation. Can be one of:
+.br
+.RS
+.IP \(bu 3
+.B clipboard
+\- Read from system clipboard
+.IP \(bu 3
+.B FILE
+\- Path to text file containing tracklist
+.IP \(bu 3
+.B URL
+\- SoundCloud URL to extract tracklist from description
+.RE
+.TP
+.BR \-\-tracklist\-file " " \fIFILE\fR
+Read tracklist from a text file (alternative to --tracklist).
+.TP
+.BR \-\-tracklist\-clipboard
+Read tracklist from clipboard (alternative to --tracklist clipboard).
+.TP
+.BR \-\-recognize
+Use music recognition (AcoustID/Shazam) to identify tracks in DJ mix. Requires pyacoustid and optionally shazamio.
+.TP
+.BR \-\-verify\-boundaries
+Verify detected boundaries using music recognition and adjust if needed. Requires both --tracklist and --recognize (or enables recognition automatically).
+.SH TAG MANAGEMENT MODE
+.SS "Workflow Overview"
+Tag management follows a declarative approach using YAML configuration:
+.PP
+.B 1. Generate YAML from current state
+.br
+.RS
+$ tagger --execute
+.RE
+.PP
+This scans all .mp3 and .m4a files in the current directory, reads their metadata, and creates tagger.yaml with the current state.
+.PP
+.B 2. Edit YAML to desired state
+.br
+.RS
+Edit tagger.yaml to define the desired tags and filenames.
+.RE
+.PP
+.B 3. Preview changes
+.br
+.RS
+$ tagger tagger.yaml
+.RE
+.PP
+Shows differences between current state and YAML (dry-run mode).
+.PP
+.B 4. Apply changes
+.br
+.RS
+$ tagger --execute tagger.yaml
+.RE
+.PP
+Applies tags and renames files to match YAML configuration.
+.SS "YAML Configuration Format"
+.PP
+The YAML file has two main sections:
+.PP
+.B defaults
+(optional) - Common metadata applied to all files:
+.RS
+.nf
+defaults:
+  album: "Album Name"
+  albumartist: "Artist Name"
+  genre: "Electronic"
+  year: 2025
+  artwork: "cover.jpg"
+  compilation: true
+  label: "Label Name"
+  bandcamp_id: "123456"
+  disc: 1
+.fi
+.RE
+.PP
+.B files
+(required) - List of individual file configurations:
+.RS
+.nf
+files:
+  - filename: "01 Track One.mp3"
+    track: 1
+    artist: "Artist Name"
+    title: "Track One"
+  - filename: "02 Track Two.mp3"
+    track: 2
+    artist: "Artist Name"
+    title: "Track Two"
+.fi
+.RE
+.PP
+File-specific values override defaults. The
+.I filename
+field is required and identifies the file to modify.
+.SS "Filename Parsing Patterns"
+.PP
+When tags are missing or --prefer-filename is used, tagger automatically parses metadata from filenames using these patterns (in order of precedence):
+.PP
+.B 1. Bandcamp format:
+.br
+.RS
+Label - Artist - Title [ID].mp3
+.RE
+.PP
+.B 2. Track with dot + artist + title:
+.br
+.RS
+1. Artist - Title.mp3
+.br
+Track number uses dot notation.
+.RE
+.PP
+.B 3. Track + artist + title:
+.br
+.RS
+01 Artist - Title.mp3
+.br
+Track number with 1+ leading zeros.
+.RE
+.PP
+.B 4. Track + title (no artist):
+.br
+.RS
+01  - Title.mp3
+.br
+Note: two spaces before hyphen when no artist.
+.RE
+.PP
+.B 5. Track + title (no separator):
+.br
+.RS
+01 Title.mp3
+.RE
+.PP
+.B 6. Artist + title (no track):
+.br
+.RS
+Artist - Title.mp3
+.RE
+.PP
+.B 7. Title only:
+.br
+.RS
+Title.mp3
+.RE
+.PP
+All patterns support flexible spacing (1+ spaces around separators).
+.SS "Filename Generation Rules"
+.PP
+Tagger generates filenames from tags using these rules:
+.PP
+.B With track and artist:
+.br
+.RS
+01 Artist - Title.mp3
+.RE
+.PP
+.B With track, no artist:
+.br
+.RS
+01  - Title.mp3
+.br
+Note: two spaces before hyphen.
+.RE
+.PP
+.B With artist, no track:
+.br
+.RS
+Artist - Title.mp3
+.RE
+.PP
+.B Title only:
+.br
+.RS
+Title.mp3
+.RE
+.PP
+Track numbers are zero-padded based on the maximum track number (minimum 2 digits). For example, if the highest track is 99, all tracks use 2 digits (01-99). If the highest is 100, all use 3 digits (001-100).
+.SS "Tag Comparison and Updates"
+.PP
+Tagger uses smart comparison to minimize unnecessary writes:
+.PP
+.B 1. Only specified fields are compared
+.br
+Fields not present in YAML are ignored (won't be modified in the file).
+.PP
+.B 2. Artwork comparison
+.br
+When YAML specifies an artwork file, tagger compares SHA256 hashes of embedded and external artwork to avoid redundant updates.
+.PP
+.B 3. Batch updates
+.br
+All tag updates for a file happen in a single write operation to preserve file integrity.
+.SS "File Conversion"
+.PP
+Tagger automatically converts .aac files to .m4a format using ffmpeg when found:
+.RS
+.IP \(bu 3
+Lossless container conversion (no re-encoding)
+.IP \(bu 3
+Original .aac file is removed after successful conversion
+.IP \(bu 3
+Conversion happens before tag operations
+.RE
+.SH DJ MIX SEGMENTATION MODE
+.SS "Audio Analysis Pipeline"
+.PP
+The segmentation engine uses a multi-stage audio analysis pipeline:
+.PP
+.B 1. Audio Loading
+.br
+.RS
+Uses librosa to load audio files with automatic format detection via audioread backend for m4a/aac formats.
+.RE
+.PP
+.B 2. Feature Extraction
+.br
+.RS
+Extracts three complementary audio features in parallel:
+.IP \(bu 3
+.B "Spectral Contrast"
+- Detects changes in frequency balance across 6 bands (bass, mids, treble). Helps identify when a new track with different EQ characteristics begins.
+.IP \(bu 3
+.B "Chroma Features"
+- Detects key/tonality changes using CQT (Constant-Q Transform). Essential for identifying harmonic transitions between tracks.
+.IP \(bu 3
+.B MFCC
+- Detects timbral changes (13 coefficients). Captures changes in sound texture and instrument characteristics.
+.RE
+.PP
+.B 3. Self-Similarity Matrix
+.br
+.RS
+Computes a sparse self-similarity matrix from chroma features using k-nearest neighbors (k=100) with cosine metric. Sparse representation reduces memory usage for long mixes (>10 minutes).
+.RE
+.PP
+.B 4. Novelty Curve Computation
+.br
+.RS
+.B For small files (<10 minutes):
+.IP \(bu 3
+Dense novelty computation using lag-to-recurrence
+.IP \(bu 3
+Full matrix processing for maximum accuracy
+.PP
+.B For large files (>10 minutes):
+.IP \(bu 3
+Chunked processing with 10-minute chunks and 1-minute overlap
+.IP \(bu 3
+Triangular windowing for smooth chunk blending
+.IP \(bu 3
+Per-chunk sparse novelty: -sum(similarity)
+.IP \(bu 3
+Weighted combination of overlapping regions
+.RE
+.PP
+.B 5. Peak Detection
+.br
+.RS
+Identifies peaks in the novelty curve with constraints:
+.IP \(bu 3
+Minimum distance: 60 seconds between boundaries
+.IP \(bu 3
+Threshold: 0.9 - (sensitivity × 0.6)
+.IP \(bu 3
+Adaptive selection when tracklist provides expected track count
+.RE
+.SS "Sensitivity Parameter Details"
+.PP
+The --sensitivity parameter controls boundary detection through threshold adjustment:
+.PP
+.B Threshold Calculation:
+.br
+.RS
+threshold = 0.9 - (sensitivity × 0.6)
+.RE
+.PP
+.B Sensitivity Range:
+.RS
+.IP "0.0" 10
+threshold = 0.9 (very strict, fewer boundaries)
+.IP "0.3" 10
+threshold = 0.72 (strict)
+.IP "0.5" 10
+threshold = 0.6 (balanced, default)
+.IP "0.7" 10
+threshold = 0.48 (loose)
+.IP "1.0" 10
+threshold = 0.3 (very loose, more boundaries)
+.RE
+.PP
+.B When to Adjust:
+.RS
+.IP \(bu 3
+Too few tracks detected → increase sensitivity (0.7-0.8)
+.IP \(bu 3
+Too many false boundaries → decrease sensitivity (0.3-0.4)
+.IP \(bu 3
+Tracklist provided → sensitivity ignored, uses expected track count
+.RE
+.SS "Tracklist-Guided Detection"
+.PP
+When a tracklist is provided via --tracklist, the detection algorithm changes:
+.PP
+.B Adaptive Peak Selection:
+.RS
+.IP "1." 4
+Extract all potential peaks from novelty curve
+.IP "2." 4
+Sort peaks by novelty value (descending)
+.IP "3." 4
+Select top N peaks where N = expected_tracks - 1
+.IP "4." 4
+Enforce minimum 60-second distance between selected peaks
+.IP "5." 4
+Sort final peaks by time
+.RE
+.PP
+This ensures the detected boundary count matches the tracklist, even if sensitivity would suggest otherwise.
+.PP
+.B Tracklist Formats Supported:
+.RS
+.IP \(bu 3
+.B "Numbered list:"
+1. Artist - Title
+.IP \(bu 3
+.B "Timestamp format:"
+00:00 Artist - Title
+.IP \(bu 3
+.B "Simple list:"
+Artist - Title
+.RE
+.SS "Music Recognition System"
+.PP
+When --recognize is enabled, tagger identifies tracks using a two-tier recognition system:
+.PP
+.B Primary: AcoustID (Free, Open-Source)
+.RS
+.IP \(bu 3
+Uses chromaprint audio fingerprinting
+.IP \(bu 3
+Queries MusicBrainz database via AcoustID API
+.IP \(bu 3
+API key: Uses ACOUSTID_API_KEY environment variable or default test key
+.IP \(bu 3
+Match threshold: 0.5 (50% confidence minimum)
+.RE
+.PP
+.B Fallback: Shazam (Automatic)
+.RS
+.IP \(bu 3
+Activated when AcoustID fails to identify a track
+.IP \(bu 3
+Uses ShazamIO library (unofficial Shazam API)
+.IP \(bu 3
+Higher accuracy for commercial/popular tracks
+.IP \(bu 3
+Confidence: Assumed 0.95 (Shazam typically high confidence)
+.RE
+.PP
+.B Sample Extraction Strategy:
+.RS
+.IP \(bu 3
+Samples from middle third of detected segment (35%-65%)
+.IP \(bu 3
+Maximum sample duration: 30 seconds
+.IP \(bu 3
+Avoids crossfade regions at segment boundaries
+.IP \(bu 3
+Requires minimum 10-second segment duration
+.RE
+.PP
+.B Recognition Process Flow:
+.RS
+.IP "1." 4
+Extract segment using ffmpeg (-ss and -t flags)
+.IP "2." 4
+Convert to WAV (44.1kHz stereo) for recognition
+.IP "3." 4
+Try AcoustID first
+.IP "4." 4
+If AcoustID fails, try Shazam (if enabled)
+.IP "5." 4
+If tracklist provided, fuzzy-match result to tracklist
+.IP "6." 4
+Clean up temporary files
+.RE
+.SS "Boundary Verification System"
+.PP
+When --verify-boundaries is enabled along with --tracklist, tagger performs intelligent verification:
+.PP
+.B Verification Process:
+.RS
+.IP "1." 4
+Recognize each detected segment
+.IP "2." 4
+Calculate match scores with ±2 positions in tracklist
+.IP "3." 4
+Identify mismatches (score < 0.5 or position mismatch)
+.IP "4." 4
+Display mismatches and suggested corrections
+.IP "5." 4
+Offer interactive retry with adjustable sensitivity
+.RE
+.PP
+.B Match Scoring Algorithm:
+.RS
+.nf
+artist_similarity = jaccard_similarity(recognized, expected)
+title_similarity = jaccard_similarity(recognized, expected)
+match_score = (artist_similarity × 0.4) + (title_similarity × 0.6)
+.fi
+.RE
+.PP
+Title is weighted more heavily (60%) as titles are more specific than artist names.
+.PP
+.B Mismatch Detection:
+.RS
+.IP \(bu 3
+.B "Low Confidence:"
+Match score < 0.5 indicates poor recognition quality
+.IP \(bu 3
+.B "Position Mismatch:"
+Best match found at different position (±2 tracks)
+.RE
+.PP
+.B Interactive Retry Options:
+.RS
+.IP "1." 4
+Continue with current boundaries (accept mismatches)
+.IP "2." 4
+Adjust sensitivity and retry detection (max 3 retries)
+.IP "3." 4
+Abort segmentation
+.RE
+.SS "CUE Sheet Generation"
+.PP
+Tagger generates CUE sheets compatible with mp3DirectCut:
+.PP
+.B Format Detection:
+.RS
+.IP \(bu 3
+.mp3 → FILE TYPE: MP3
+.IP \(bu 3
+.m4a → FILE TYPE: MP4
+.IP \(bu 3
+.aac (raw ADTS) → FILE TYPE: WAVE (for mp3DirectCut compatibility)
+.IP \(bu 3
+.wav → FILE TYPE: WAVE
+.RE
+.PP
+.B Time Format:
+.RS
+MM:SS:FF where FF = frames (1/75th of a second)
+.RE
+.PP
+.B Track Information:
+.RS
+.IP \(bu 3
+Always starts with TRACK 01 at 00:00:00
+.IP \(bu 3
+Subsequent tracks at detected boundaries
+.IP \(bu 3
+If tracklist provided, includes PERFORMER and TITLE
+.IP \(bu 3
+Otherwise, uses generic "Track NN" titles
+.RE
+.PP
+.B Example CUE Sheet:
+.RS
+.nf
+FILE "mix.mp3" MP3
+  TRACK 01 AUDIO
+    PERFORMER "Artist One"
+    TITLE "Track One"
+    INDEX 01 00:00:00
+  TRACK 02 AUDIO
+    PERFORMER "Artist Two"
+    TITLE "Track Two"
+    INDEX 01 03:45:23
+.fi
+.RE
+.SS "Format Conversion for mp3DirectCut"
+.PP
+When processing M4A/MP4 files, tagger automatically converts to raw ADTS AAC format for mp3DirectCut compatibility:
+.PP
+.B Conversion Process:
+.RS
+.IP "1." 4
+Detect file format using ffprobe
+.IP "2." 4
+If M4A/MP4 container detected, convert to raw AAC:
+.RS
+ffmpeg -i input.m4a -c copy -f adts output.aac
+.RE
+.IP "3." 4
+Use converted file for analysis and CUE sheet reference
+.IP "4." 4
+Cache converted file (reuse if exists)
+.RE
+.PP
+This ensures mp3DirectCut can properly split the mix using the CUE sheet markers.
+.SS "Performance Optimization"
+.PP
+Tagger implements several optimizations for processing large DJ mixes:
+.PP
+.B Multiprocessing (Parallel Chunk Processing):
+.RS
+.IP \(bu 3
+Chunks processed in parallel using all CPU cores (Python multiprocessing.Pool)
+.IP \(bu 3
+Automatic detection of CPU count for optimal worker allocation
+.IP \(bu 3
+Unordered result collection for maximum throughput
+.IP \(bu 3
+Significantly reduces processing time for large files (>10 minutes)
+.RE
+.PP
+.B Multi-Threading:
+.RS
+.IP \(bu 3
+All CPU cores enabled for BLAS/LAPACK operations within each worker
+.IP \(bu 3
+Parallel k-nearest neighbors computation
+.IP \(bu 3
+Environment variables set: OMP_NUM_THREADS, MKL_NUM_THREADS, VECLIB_MAXIMUM_THREADS
+.RE
+.PP
+.B Memory Management:
+.RS
+.IP \(bu 3
+Sparse matrices for similarity computation (k=100 neighbors)
+.IP \(bu 3
+Chunked processing for files >10 minutes (10-minute chunks, 1-minute overlap)
+.IP \(bu 3
+Each chunk processed independently in separate process
+.IP \(bu 3
+Streaming audio loading via librosa
+.RE
+.PP
+.B Progress Indicators:
+.RS
+.IP \(bu 3
+Animated spinners (⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏) for long operations
+.IP \(bu 3
+Progress bars with tqdm for chunked processing
+.IP \(bu 3
+Status messages for each processing stage
+.RE
+.SH EXAMPLES
+.SS "Tag Management Examples"
+.PP
+.B Generate YAML from current directory:
+.RS
+$ tagger --execute
+.RE
+.PP
+.B Apply tags from YAML (dry-run):
+.RS
+$ tagger tagger.yaml
+.RE
+.PP
+.B Apply tags from YAML (execute):
+.RS
+$ tagger --execute tagger.yaml
+.RE
+.PP
+.B Generate YAML preferring filenames over tags:
+.RS
+$ tagger --execute --prefer-filename
+.RE
+.PP
+.B Show differences between current state and YAML:
+.RS
+$ tagger
+.RE
+.PP
+(When tagger.yaml exists, default mode is diff)
+.SS "DJ Mix Segmentation Examples"
+.PP
+.B Basic segmentation:
+.RS
+$ tagger --segment mix.mp3
+.RE
+.PP
+.B Segmentation with custom sensitivity:
+.RS
+$ tagger --segment mix.mp3 --sensitivity 0.7
+.RE
+.PP
+.B Segmentation with tracklist from file:
+.RS
+$ tagger --segment mix.mp3 --tracklist tracklist.txt
+.RE
+.PP
+.B Segmentation with tracklist from clipboard:
+.RS
+$ tagger --segment mix.mp3 --tracklist clipboard
+.RE
+.PP
+.B Segmentation with tracklist from SoundCloud:
+.RS
+$ tagger --segment mix.mp3 --tracklist https://soundcloud.com/artist/mix
+.RE
+.PP
+.B Segmentation with music recognition:
+.RS
+$ tagger --segment mix.mp3 --recognize
+.RE
+.PP
+.B Segmentation with boundary verification:
+.RS
+$ tagger --segment mix.mp3 --tracklist tracklist.txt --verify-boundaries
+.RE
+.PP
+.B Complete workflow with custom output:
+.RS
+$ tagger --segment mix.mp3 -o output.cue --tracklist tracklist.txt --recognize --verify-boundaries --sensitivity 0.6
+.RE
+.SH SUPPORTED FILE FORMATS
+.PP
+.B Audio Formats (Tag Management):
+.RS
+.IP \(bu 3
+.B .mp3
+- MPEG-1/2 Layer 3 with ID3v2 tags
+.IP \(bu 3
+.B .m4a
+- MPEG-4 Audio with MP4 tags
+.IP \(bu 3
+.B .aac
+- Raw AAC (automatically converted to .m4a)
+.RE
+.PP
+.B Audio Formats (Segmentation):
+.RS
+.IP \(bu 3
+Any format supported by ffmpeg/audioread
+.IP \(bu 3
+Tested: .mp3, .m4a, .aac, .wav, .flac, .ogg
+.RE
+.PP
+.B Artwork Formats:
+.RS
+.IP \(bu 3
+.jpg, .jpeg (MIME: image/jpeg)
+.IP \(bu 3
+.png (MIME: image/png)
+.RE
+.SH FILES
+.TP
+.B tagger.yaml
+Default YAML configuration file for tag management.
+.TP
+.B *.cue
+CUE sheet files generated for DJ mixes (default: same name as audio file).
+.TP
+.B *_converted.aac
+Temporary AAC files created for mp3DirectCut compatibility (cached).
+.SH ENVIRONMENT
+.TP
+.B ACOUSTID_API_KEY
+API key for AcoustID music recognition service. If not set, uses default test key "8XaBELgH". Get your free key at https://acoustid.org/new-application
+.TP
+.B OMP_NUM_THREADS
+Number of threads for OpenMP operations (auto-set to CPU count).
+.TP
+.B MKL_NUM_THREADS
+Number of threads for Intel MKL operations (auto-set to CPU count).
+.TP
+.B VECLIB_MAXIMUM_THREADS
+Number of threads for Apple Accelerate (auto-set to CPU count on macOS).
+.SH DEPENDENCIES
+.PP
+.B Core Dependencies (Always Required):
+.RS
+.IP \(bu 3
+mutagen >= 1.45.0 - Audio tag manipulation
+.IP \(bu 3
+PyYAML >= 6.0 - YAML configuration handling
+.IP \(bu 3
+pydantic >= 2.0.0 - YAML schema validation
+.RE
+.PP
+.B DJ Mix Segmentation Dependencies (Optional but Recommended):
+.RS
+.IP \(bu 3
+librosa >= 0.10.0 - Audio analysis and feature extraction
+.IP \(bu 3
+numpy >= 1.24.0 - Numerical operations
+.IP \(bu 3
+scipy >= 1.10.0 - Scientific computing (sparse matrices)
+.IP \(bu 3
+scikit-learn >= 1.0.0 - k-nearest neighbors for similarity
+.IP \(bu 3
+numba >= 0.56.0 - JIT compilation for performance
+.IP \(bu 3
+pyperclip >= 1.8.0 - Clipboard support
+.IP \(bu 3
+requests >= 2.31.0 - HTTP requests for SoundCloud
+.IP \(bu 3
+beautifulsoup4 >= 4.12.0 - HTML parsing for SoundCloud
+.IP \(bu 3
+tqdm >= 4.66.0 - Progress bars
+.IP \(bu 3
+soundfile >= 0.12.0 - Audio file I/O
+.IP \(bu 3
+audioread >= 3.0.0 - Audio format fallback
+.RE
+.PP
+.B Music Recognition Dependencies (Optional):
+.RS
+.IP \(bu 3
+pyacoustid >= 1.3.0 - AcoustID audio fingerprinting
+.IP \(bu 3
+shazamio >= 0.8.0 - Shazam API fallback
+.RE
+.PP
+.B External Dependencies:
+.RS
+.IP \(bu 3
+ffmpeg - Audio/video processing (required for .aac conversion and segmentation)
+.IP \(bu 3
+ffprobe - Format detection (bundled with ffmpeg)
+.IP \(bu 3
+libsndfile - Audio file I/O (required by soundfile)
+.RE
+.SH EXIT STATUS
+.TP
+.B 0
+Success
+.TP
+.B 1
+General error (invalid arguments, file not found, etc.)
+.SH DIAGNOSTICS
+.PP
+.B Common Errors and Solutions:
+.PP
+.B "Error: mutagen is not installed"
+.RS
+Install mutagen: pip install mutagen
+.RE
+.PP
+.B "Error: pydantic is not installed"
+.RS
+Install pydantic: pip install pydantic
+.RE
+.PP
+.B "Error: librosa is not installed"
+.RS
+Install librosa and dependencies: pip install librosa
+.RE
+.PP
+.B "Warning: ffmpeg not found"
+.RS
+Install ffmpeg via package manager (brew install ffmpeg on macOS)
+.RE
+.PP
+.B "YAML validation failed"
+.RS
+Common issues:
+.IP \(bu 3
+Typo in field names (e.g., 'default' instead of 'defaults')
+.IP \(bu 3
+Wrong data type (e.g., year as string instead of number)
+.IP \(bu 3
+Missing required fields (filename)
+.IP \(bu 3
+Invalid year range (must be 1900-2100)
+.IP \(bu 3
+Invalid track/disc numbers (must be positive)
+.RE
+.PP
+.B "scipy.sparse.linalg.ArpackNoConvergence"
+.RS
+Sparse matrix eigenvalue computation failed (very rare). Workaround: Use smaller chunk size or reduce k parameter in code.
+.RE
+.SH BUGS
+.PP
+Report bugs at: https://github.com/delphinus/homebrew-tagger/issues
+.SH AUTHOR
+.PP
+Written by delphinus.
+.SH COPYRIGHT
+.PP
+Copyright © 2025 delphinus. Licensed under the MIT License.
+.SH SEE ALSO
+.PP
+.BR mutagen (1),
+.BR ffmpeg (1),
+.BR mp3DirectCut (1)
+.PP
+Project homepage: https://github.com/delphinus/homebrew-tagger
+.PP
+AcoustID: https://acoustid.org
+.PP
+MusicBrainz: https://musicbrainz.org

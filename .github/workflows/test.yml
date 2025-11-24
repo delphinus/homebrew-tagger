@@ -57,6 +57,33 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    - name: Patch formula for PR testing
+      run: |
+        FORMULA=tagger.rb
+
+        if [[ $GITHUB_REF != refs/heads/main ]]; then
+          echo "Patching formula for PR testing on $GITHUB_REF"
+          # Use --always to fallback to commit hash if no tags exist
+          HASH=$(git describe --always --tags HEAD | tr -d '\n')
+          export HASH
+          export URL=https://github.com/delphinus/homebrew-tagger/tarball/$HASH
+          SHA=$(curl -L "$URL" | shasum -a256 | cut -wf1)
+          export SHA
+          perl -i -pe 's,(?<=^  url ").*(?="$),$ENV{URL},' $FORMULA
+          perl -i -pe 's,(?<=^  sha256 ").*(?="$),$ENV{SHA},' $FORMULA
+          # Add version field after license line if not present, or update if present
+          if grep -q '^  version ' $FORMULA; then
+            perl -i -pe 's,(?<=^  version ").*(?="$),$ENV{HASH},' $FORMULA
+          else
+            perl -i -pe 's,^(  license .*)$,$1\n  version "$ENV{HASH}",' $FORMULA
+          fi
+
+          echo "Patched formula:"
+          grep -A2 'url "' $FORMULA
+          grep 'sha256 "' $FORMULA
+          grep 'version "' $FORMULA || echo "(no version field)"
+        fi
+
     - name: Setup Homebrew tap
       run: |
         # Create a local tap for testing
@@ -73,19 +100,27 @@ jobs:
         which tagger
 
         # Verify version matches expected version from formula
-        EXPECTED_VERSION=$(grep -E '^\s+url' tagger.rb | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | sed 's/v//')
-        ACTUAL_VERSION=$(tagger --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+        # For PR builds, the formula has a 'version' field with commit hash
+        # For main branch, extract version from URL
+        if grep -q '^  version ' tagger.rb; then
+          # PR build - version field exists, skip version check (commit hash != semver)
+          echo "✓ PR build detected - skipping version number check"
+        else
+          # Main branch build - extract from URL
+          EXPECTED_VERSION=$(grep -E '^\s+url' tagger.rb | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | sed 's/v//')
+          ACTUAL_VERSION=$(tagger --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
 
-        echo "Expected version: ${EXPECTED_VERSION}"
-        echo "Actual version: ${ACTUAL_VERSION}"
+          echo "Expected version: ${EXPECTED_VERSION}"
+          echo "Actual version: ${ACTUAL_VERSION}"
 
-        if [ "${EXPECTED_VERSION}" != "${ACTUAL_VERSION}" ]; then
-          echo "❌ Version mismatch!"
-          echo "Formula specifies v${EXPECTED_VERSION} but tagger reports ${ACTUAL_VERSION}"
-          exit 1
+          if [ "${EXPECTED_VERSION}" != "${ACTUAL_VERSION}" ]; then
+            echo "❌ Version mismatch!"
+            echo "Formula specifies v${EXPECTED_VERSION} but tagger reports ${ACTUAL_VERSION}"
+            exit 1
+          fi
+
+          echo "✓ Version check passed: ${ACTUAL_VERSION}"
         fi
-
-        echo "✓ Version check passed: ${ACTUAL_VERSION}"
 
     - name: Check installed Python modules
       run: |
