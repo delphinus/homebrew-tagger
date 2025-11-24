@@ -1445,6 +1445,9 @@ Note:
             # Default: same as audio file with .cue extension
             output_path = Path(args.segment).with_suffix(".cue")
 
+        # Record start time for performance reporting
+        start_time = time.time()
+
         try:
             segment_mix(
                 args.segment,
@@ -1457,6 +1460,18 @@ Note:
         except Exception as e:
             print(f"Error: {e}", file=sys.stderr)
             sys.exit(1)
+
+        # Report execution time
+        elapsed_time = time.time() - start_time
+        print(f"\n{'='*60}", file=sys.stderr)
+        print(f"Segmentation completed successfully!", file=sys.stderr)
+        print(f"{'='*60}", file=sys.stderr)
+        print(
+            f"Total time: {elapsed_time:.2f} seconds ({elapsed_time/60:.2f} minutes)",
+            file=sys.stderr,
+        )
+        print(f"Output: {output_path}", file=sys.stderr)
+        print(f"{'='*60}", file=sys.stderr)
 
         sys.exit(0)
 
