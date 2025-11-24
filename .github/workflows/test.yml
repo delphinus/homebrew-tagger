@@ -100,19 +100,27 @@ jobs:
         which tagger
 
         # Verify version matches expected version from formula
-        EXPECTED_VERSION=$(grep -E '^\s+url' tagger.rb | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | sed 's/v//')
-        ACTUAL_VERSION=$(tagger --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+        # For PR builds, the formula has a 'version' field with commit hash
+        # For main branch, extract version from URL
+        if grep -q '^  version ' tagger.rb; then
+          # PR build - version field exists, skip version check (commit hash != semver)
+          echo "✓ PR build detected - skipping version number check"
+        else
+          # Main branch build - extract from URL
+          EXPECTED_VERSION=$(grep -E '^\s+url' tagger.rb | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | sed 's/v//')
+          ACTUAL_VERSION=$(tagger --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
 
-        echo "Expected version: ${EXPECTED_VERSION}"
-        echo "Actual version: ${ACTUAL_VERSION}"
+          echo "Expected version: ${EXPECTED_VERSION}"
+          echo "Actual version: ${ACTUAL_VERSION}"
 
-        if [ "${EXPECTED_VERSION}" != "${ACTUAL_VERSION}" ]; then
-          echo "❌ Version mismatch!"
-          echo "Formula specifies v${EXPECTED_VERSION} but tagger reports ${ACTUAL_VERSION}"
-          exit 1
+          if [ "${EXPECTED_VERSION}" != "${ACTUAL_VERSION}" ]; then
+            echo "❌ Version mismatch!"
+            echo "Formula specifies v${EXPECTED_VERSION} but tagger reports ${ACTUAL_VERSION}"
+            exit 1
+          fi
+
+          echo "✓ Version check passed: ${ACTUAL_VERSION}"
         fi
-
-        echo "✓ Version check passed: ${ACTUAL_VERSION}"
 
     - name: Check installed Python modules
       run: |
