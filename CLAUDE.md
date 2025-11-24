@@ -369,3 +369,59 @@ done
 - CI runs can take variable amounts of time
 - Network hiccups can cause single checks to fail
 - Continuous monitoring is more resilient and reliable
+
+## Proactive Result Reporting
+
+**CRITICAL: Report Background Process Results Without Being Asked**
+
+When background monitoring processes are running, proactively check and report their status.
+
+✓ **REQUIRED: Immediate Checking**
+- After starting a background monitoring process, check its output immediately (within seconds)
+- Use BashOutput tool to read background process output periodically
+- Report results proactively without waiting for user to ask
+- Check output every 30-60 seconds until tests complete
+
+❌ **FORBIDDEN:**
+- Starting background monitors and never checking them
+- Waiting for user to ask "what's the status?"
+- Saying "I'll check after X seconds" but not actually checking
+- Ignoring background process reminders from system
+
+**Example workflow:**
+```bash
+# 1. Start background monitoring
+bash -c 'while true; do sleep 30; gh pr checks 53 || true; done' &
+MONITOR_ID=$!
+
+# 2. Immediately check initial output (within 30-60 seconds)
+BashOutput $MONITOR_ID
+
+# 3. Continue checking periodically
+# Every 30-60 seconds until tests complete
+
+# 4. Report results proactively
+"CI tests are still running, I'm monitoring..."
+"All tests passed! Proceeding to merge..."
+"Tests failed with error X, investigating..."
+```
+
+**When background processes are mentioned in system reminders:**
+- These are NOT just informational messages
+- They indicate you SHOULD check the output
+- Use BashOutput tool immediately when reminded
+- Report findings to user proactively
+
+**Implementation in practice:**
+1. Start background CI monitoring with `bash -c 'while true; do sleep 30; gh pr checks N || true; done'`
+2. Within 30-60 seconds, use BashOutput to check what's happening
+3. Report status to user: "Tests are running, checking status..."
+4. Continue checking every 30-60 seconds
+5. Report completion: "All tests passed!" or "Test X failed, investigating..."
+6. Stop monitoring process after results are final
+
+**Rationale:**
+- Background processes exist to help track status
+- If not checked, they provide no value
+- Users expect proactive updates, not reactive responses
+- System reminders about background processes are actionable prompts
