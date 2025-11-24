@@ -173,3 +173,34 @@ Files that must have matching versions:
    - After all CI checks pass: merge the PR
    - Follow "Release Workflow" above to create version bump and release
    - Clean up feature branch after merge (usually done automatically with --delete-branch)
+
+## Testing Policy
+
+**CRITICAL: NEVER SKIP TESTS**
+
+❌ **ABSOLUTELY FORBIDDEN:**
+- Skipping CI tests to "fix them later"
+- Disabling test workflows temporarily
+- Marking tests as "allowed to fail" without fixing them
+- Merging PRs with failing tests
+- Bypassing test requirements in any way
+- Using `--no-verify` or similar flags to skip tests
+
+✓ **ALWAYS REQUIRED:**
+- All CI tests must pass before merging any PR
+- All test failures must be investigated and fixed
+- Tests must be run on all supported platforms
+- New features must include appropriate tests
+- Bug fixes should include regression tests
+
+**Rationale:**
+- Tests are the safety net that prevents regressions
+- Skipping tests compromises code quality and reliability
+- "Temporary" test skips often become permanent
+- Failed tests indicate real problems that must be addressed
+
+**If tests fail:**
+1. Investigate the root cause immediately
+2. Fix the underlying issue (not the test itself, unless the test is wrong)
+3. Re-run tests to verify the fix
+4. Only after all tests pass: proceed with merge
