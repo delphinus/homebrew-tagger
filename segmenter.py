@@ -339,6 +339,19 @@ class DJMixSegmenter:
 
         return self._find_peaks(novelty, sr, sensitivity, expected_count)
 
+    @staticmethod
+    def _init_worker():
+        """
+        Initialize worker process to prevent sklearn parallelization warnings.
+        This is called once per worker process at initialization.
+        """
+        import os
+        import warnings
+        # Disable sklearn parallelization in worker processes
+        os.environ["LOKY_MAX_CPU_COUNT"] = "1"
+        # Suppress the specific sklearn warning
+        warnings.filterwarnings("ignore", message=".*Loky-backed parallel loops.*")
+
     def _process_single_chunk(
         self,
         chunk_data: Tuple[int, np.ndarray, int, int, int],
@@ -354,12 +367,6 @@ class DJMixSegmenter:
             Tuple of (start_idx, novelty_curve)
         """
         chunk_index, chunk, sr, start_idx, total_chunks = chunk_data
-
-        # Disable sklearn parallelization within multiprocessing workers
-        # This prevents the "Loky-backed parallel loops cannot be called in multiprocessing" warning
-        # Since we're already parallelizing at the chunk level, sklearn should use n_jobs=1
-        import os
-        os.environ["LOKY_MAX_CPU_COUNT"] = "1"
 
         # Extract chroma for this chunk
         chroma = librosa.feature.chroma_cqt(y=chunk, sr=sr, hop_length=self.hop_length)
@@ -421,15 +428,17 @@ class DJMixSegmenter:
             chunk_tasks.append((i, chunk, sr, start_idx, total_chunks))
 
         # Process chunks in parallel using multiprocessing
-        print(f"Processing {total_chunks} chunks in parallel...", file=sys.stderr)
-
         all_novelty = []
-        with multiprocessing.Pool(processes=cpu_count) as pool:
-            # Use imap_unordered for better performance with progress tracking
-            with tqdm(total=total_chunks, desc="Processing chunks", disable=False, file=sys.stderr) as pbar:
+        completed_chunks = 0
+
+        with Spinner(f"Processing chunks (0/{total_chunks})") as spinner:
+            with multiprocessing.Pool(processes=cpu_count, initializer=self._init_worker) as pool:
+                # Use imap_unordered for better performance
                 for result in pool.imap_unordered(self._process_single_chunk, chunk_tasks):
                     all_novelty.append(result)
-                    pbar.update(1)
+                    completed_chunks += 1
+                    # Update spinner message with progress
+                    spinner.message = f"Processing chunks ({completed_chunks}/{total_chunks})"
 
         # Combine novelty curves from all chunks
         print("Combining results from chunks...", file=sys.stderr)
