@@ -258,6 +258,51 @@ class Tagger < Formula
     sha256 "ac4823dc9a8abd0b57455a3b29340c1fc090286bab0d8cc06eb862d7626691d0"
   end
 
+  # shazamio dependencies
+  resource "aiofiles" do
+    url "https://files.pythonhosted.org/packages/bc/8a/340a1555ae33d7354dbca4faa54948d76d89a27ceef032c8c3bc661d003e/aiofiles-25.1.0-py3-none-any.whl"
+    sha256 "abe311e527c862958650f9438e859c1fa7568a141b22abcd015e120e86a85695"
+  end
+
+  resource "aiohttp" do
+    url "https://files.pythonhosted.org/packages/1c/ce/3b83ebba6b3207a7135e5fcaba49706f8a4b6008153b4e30540c982fae26/aiohttp-3.13.2.tar.gz"
+    sha256 "40176a52c186aefef6eb3cad2cdd30cd06e3afbe88fe8ab2af9c0b90f228daca"
+  end
+
+  resource "aiohttp-retry" do
+    url "https://files.pythonhosted.org/packages/1a/99/84ba7273339d0f3dfa57901b846489d2e5c2cd731470167757f1935fffbd/aiohttp_retry-2.9.1-py3-none-any.whl"
+    sha256 "66d2759d1921838256a05a3f80ad7e724936f083e35be5abb5e16eed6be6dc54"
+  end
+
+  resource "anyio" do
+    url "https://files.pythonhosted.org/packages/15/b3/9b1a8074496371342ec1e796a96f99c82c945a339cd81a8e73de28b4cf9e/anyio-4.11.0-py3-none-any.whl"
+    sha256 "0287e96f4d26d4149305414d4e3bc32f0dcd0862365a4bddea19d7a1ec38c4fc"
+  end
+
+  resource "dataclass-factory" do
+    url "https://files.pythonhosted.org/packages/f1/66/50b9f5d8a0e9fbe5469c5b8a7f198511fff9959347fc2443531d651b21d7/dataclass_factory-2.16-py3-none-any.whl"
+    sha256 "9d01e73d40b8f74051df822f21d8dc8bbf2754b11670cd1c477357e8b21323ed"
+  end
+
+  resource "pydub" do
+    url "https://files.pythonhosted.org/packages/a6/53/d78dc063216e62fc55f6b2eebb447f6a4b0a59f55c8406376f76bf959b08/pydub-0.25.1-py2.py3-none-any.whl"
+    sha256 "65617e33033874b59d87db603aa1ed450633288aefead953b30bded59cb599a6"
+  end
+
+  on_arm do
+    resource "shazamio-core" do
+      url "https://files.pythonhosted.org/packages/7c/56/5ee02044550d30744668edf1a96e1699124f7c3dbe93fadf422708ba9f07/shazamio_core-1.1.2-cp312-cp312-macosx_11_0_arm64.whl"
+      sha256 "2d85467441d71d690a998528fdda9113edd08a962e79c591a5e3842ec90f1865"
+    end
+  end
+
+  on_intel do
+    resource "shazamio-core" do
+      url "https://files.pythonhosted.org/packages/a8/d2/8b33c1cd90c83dda7c0bf1011d18c34b34eaafb89a5c96a508cb79200f0e/shazamio_core-1.1.2-cp312-cp312-macosx_10_12_x86_64.whl"
+      sha256 "05e4b9e810c135467f89ac490b98d7dbe81e944604dd4c2efdae244414428f3d"
+    end
+  end
+
   def install
     # Create virtualenv
     venv = virtualenv_create(libexec, "python3.12")
@@ -309,8 +354,8 @@ class Tagger < Formula
     system libexec/"bin/python", "-c", "import acoustid; import chromaprint; " \
            "print('AcoustID/Chromaprint available')"
 
-    system libexec/"bin/python", "-c", "import shazamio; " \
-           "print('Shazam API available')"
+    system libexec/"bin/python", "-c", "from shazamio import Shazam; " \
+           "print('✓ All music recognition modules installed correctly')"
 
     # Test man page installation
     assert_predicate man1/"tagger.1", :exist?, "Man page should be installed"
