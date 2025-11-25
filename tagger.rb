@@ -289,9 +289,18 @@ class Tagger < Formula
     sha256 "65617e33033874b59d87db603aa1ed450633288aefead953b30bded59cb599a6"
   end
 
-  resource "shazamio-core" do
-    url "https://files.pythonhosted.org/packages/a4/96/973f87fbb5d9b1384b0495475af28a688f7ea353ac137ea9fa03fd3f2f56/shazamio_core-1.1.2.tar.gz"
-    sha256 "e26e6b967286eca82e3fb90a20695d5e13f163e30c57e2543fe2ca98ec6dfa51"
+  on_arm do
+    resource "shazamio-core" do
+      url "https://files.pythonhosted.org/packages/7c/56/5ee02044550d30744668edf1a96e1699124f7c3dbe93fadf422708ba9f07/shazamio_core-1.1.2-cp312-cp312-macosx_11_0_arm64.whl"
+      sha256 "2d85467441d71d690a998528fdda9113edd08a962e79c591a5e3842ec90f1865"
+    end
+  end
+
+  on_intel do
+    resource "shazamio-core" do
+      url "https://files.pythonhosted.org/packages/a8/d2/8b33c1cd90c83dda7c0bf1011d18c34b34eaafb89a5c96a508cb79200f0e/shazamio_core-1.1.2-cp312-cp312-macosx_10_12_x86_64.whl"
+      sha256 "05e4b9e810c135467f89ac490b98d7dbe81e944604dd4c2efdae244414428f3d"
+    end
   end
 
   def install
