@@ -10,6 +10,7 @@ class Tagger < Formula
   sha256 "4bda498cdeb53599d7ba5396bf517531d71fa6314a0da7563ffb82a5a4fc68eb"
   license "MIT"
 
+  depends_on "chromaprint"
   depends_on "ffmpeg"
   depends_on "libsndfile"
   depends_on "python@3.12"
@@ -303,10 +304,13 @@ class Tagger < Formula
     system libexec/"bin/python", "-c", "import librosa; import numpy; import scipy; " \
            "print('Segmentation dependencies OK')"
 
-    # Test music recognition dependencies (pyacoustid)
-    # Should be installed as part of segmentation extras
-    system libexec/"bin/python", "-c", "import acoustid; " \
-           "print('Music recognition available')"
+    # Test music recognition dependencies (pyacoustid and shazamio)
+    # Both should be installed and working
+    system libexec/"bin/python", "-c", "import acoustid; import chromaprint; " \
+           "print('AcoustID/Chromaprint available')"
+
+    system libexec/"bin/python", "-c", "import shazamio; " \
+           "print('Shazam API available')"
 
     # Test man page installation
     assert_predicate man1/"tagger.1", :exist?, "Man page should be installed"
