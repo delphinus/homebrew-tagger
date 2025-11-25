@@ -1,0 +1,106 @@
+name: Validate Tag Version
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  validate-version:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ github.ref }}
+
+    - name: Extract tag version
+      id: tag
+      run: |
+        TAG_NAME="${GITHUB_REF#refs/tags/v}"
+        echo "version=${TAG_NAME}" >> $GITHUB_OUTPUT
+        echo "Tag version: ${TAG_NAME}"
+
+    - name: Extract code versions
+      id: code
+      run: |
+        TAGGER_VERSION=$(grep -E '^__version__' tagger | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+        SETUP_VERSION=$(grep -E '^\s+version=' setup.py | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+        MAN_VERSION=$(grep -E '^\.TH TAGGER' man/tagger.1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+
+        echo "tagger=${TAGGER_VERSION}" >> $GITHUB_OUTPUT
+        echo "setup=${SETUP_VERSION}" >> $GITHUB_OUTPUT
+        echo "man=${MAN_VERSION}" >> $GITHUB_OUTPUT
+
+        echo "tagger script version: ${TAGGER_VERSION}"
+        echo "setup.py version: ${SETUP_VERSION}"
+        echo "man page version: ${MAN_VERSION}"
+
+    - name: Validate version consistency
+      run: |
+        TAG_VERSION="${{ steps.tag.outputs.version }}"
+        TAGGER_VERSION="${{ steps.code.outputs.tagger }}"
+        SETUP_VERSION="${{ steps.code.outputs.setup }}"
+        MAN_VERSION="${{ steps.code.outputs.man }}"
+
+        MISMATCH=0
+
+        # Check if tag matches code versions
+        if [ "${TAG_VERSION}" != "${TAGGER_VERSION}" ]; then
+          echo "❌ ERROR: Tag version (${TAG_VERSION}) does not match tagger script version (${TAGGER_VERSION})"
+          MISMATCH=1
+        fi
+
+        if [ "${TAG_VERSION}" != "${SETUP_VERSION}" ]; then
+          echo "❌ ERROR: Tag version (${TAG_VERSION}) does not match setup.py version (${SETUP_VERSION})"
+          MISMATCH=1
+        fi
+
+        if [ "${TAG_VERSION}" != "${MAN_VERSION}" ]; then
+          echo "❌ ERROR: Tag version (${TAG_VERSION}) does not match man page version (${MAN_VERSION})"
+          MISMATCH=1
+        fi
+
+        # Check if all code versions match each other
+        if [ "${TAGGER_VERSION}" != "${SETUP_VERSION}" ] || [ "${TAGGER_VERSION}" != "${MAN_VERSION}" ]; then
+          echo "❌ ERROR: Code versions are inconsistent with each other"
+          MISMATCH=1
+        fi
+
+        if [ ${MISMATCH} -eq 1 ]; then
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "⚠️  VERSION MISMATCH DETECTED"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+          echo "Tag v${TAG_VERSION} was created, but the code versions don't match!"
+          echo ""
+          echo "This usually happens when:"
+          echo "  1. You created a tag manually without updating code versions first"
+          echo "  2. You forgot to commit version bump before tagging"
+          echo ""
+          echo "Expected workflow:"
+          echo "  1. Merge feature/fix PR to main"
+          echo "  2. Use the Release workflow to create a new version:"
+          echo "     - Go to Actions → Release → Run workflow"
+          echo "     - Enter the new version number (e.g., 1.15.9)"
+          echo "     - The workflow will:"
+          echo "       a. Update version in tagger, setup.py, and man page"
+          echo "       b. Commit the version bump"
+          echo "       c. Create and push the tag"
+          echo "       d. Create GitHub release"
+          echo "       e. Update Homebrew formula"
+          echo ""
+          echo "To fix this issue:"
+          echo "  1. DO NOT delete the tag (tags are immutable once published)"
+          echo "  2. Create a new patch version instead:"
+          echo "     - Increment to next patch version (e.g., ${TAG_VERSION} → X.Y.$((Z+1)))"
+          echo "     - Use the Release workflow with the new version"
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          exit 1
+        fi
+
+        echo "✅ Version validation passed!"
+        echo "   Tag: v${TAG_VERSION}"
+        echo "   All code versions match: ${TAGGER_VERSION}"
