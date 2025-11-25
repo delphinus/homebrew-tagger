@@ -328,6 +328,33 @@ sleep 120 && gh pr checks <PR_NUMBER>
 gh pr checks <PR_NUMBER> --watch
 ```
 
+**CRITICAL: Monitor Cleanup**
+
+Before starting a new monitoring process, ALWAYS clean up old monitoring processes to prevent noise.
+
+✓ **REQUIRED: Cleanup Before New Monitoring**
+```bash
+# 1. Kill all existing PR monitoring processes
+pkill -f "gh pr checks" || true
+
+# 2. Start new monitoring for current PR
+while true; do
+    sleep 30
+    gh pr checks <NEW_PR_NUMBER> || true
+done
+```
+
+**When to clean up:**
+- Before creating a new PR and starting monitoring
+- After a PR is merged (kill that specific monitor)
+- When switching between different tasks/PRs
+
+**Why this is critical:**
+- Old monitors create unnecessary system reminders
+- System reminders from completed PRs are noise
+- Multiple monitors running simultaneously waste resources
+- Clean monitoring state prevents confusion
+
 **Why continuous loops are better:**
 - Survive temporary network issues
 - Continue monitoring even if one check fails
