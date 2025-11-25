@@ -373,9 +373,9 @@ class DJMixSegmenter:
 
         # Compute similarity matrix for this chunk
         # Use sparse matrix with limited k-neighbors to reduce memory usage
-        # n_jobs=1 to avoid nested parallelization (we're already in a multiprocessing worker)
+        # Parallelization is controlled via NearestNeighbors monkey-patch
         chroma_similarity = librosa.segment.recurrence_matrix(
-            chroma, k=100, mode="affinity", metric="cosine", width=9, sparse=True, n_jobs=1
+            chroma, k=100, mode="affinity", metric="cosine", width=9, sparse=True
         )
 
         # Compute novelty curve
