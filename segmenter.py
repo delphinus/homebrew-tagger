@@ -582,12 +582,6 @@ class DJMixSegmenter:
             if is_mp4_container or ext in [".m4a", ".mp4", ".aac"]:
                 # Convert to raw ADTS AAC
                 output_path = path.with_suffix(".aac")
-                if output_path.stem.endswith("_converted"):
-                    # Already converted
-                    return str(output_path)
-
-                # Add _converted suffix to avoid overwriting
-                output_path = path.with_name(f"{path.stem}_converted.aac")
 
                 if output_path.exists():
                     print(f"Using existing converted file: {output_path}", file=sys.stderr)
