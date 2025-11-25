@@ -17,19 +17,40 @@
    - `tagger.rb`: Homebrew formula URL tag
    - All four must match for releases
 
-2. **CI Version Check**
-   - `.github/workflows/ci.yml` automatically verifies version consistency
-   - Checks that `tagger` script and `setup.py` have matching versions
+2. **CI Version Checks**
+   - `.github/workflows/ci.yml` - Verifies version consistency in PRs
+   - `.github/workflows/validate-tag.yml` - **CRITICAL: Validates tag matches code versions**
+     - Runs automatically when a tag is pushed
+     - **Will FAIL if you create a tag without updating code versions first**
+     - This prevents version mismatches from happening
 
-3. **Release Process (CRITICAL: All steps are REQUIRED)**
-   - Update version in BOTH `tagger` and `setup.py`
-   - Commit and push to main
-   - Create new tag: `git tag vX.Y.Z && git push origin vX.Y.Z`
-   - **REQUIRED: Update Homebrew formula (`tagger.rb`)**
-     - Update URL to new tag
-     - Calculate and update SHA256: `curl -sL <URL> | shasum -a 256`
-     - Commit and push formula update
-   - Create GitHub release with release notes
+3. **Release Process - ALWAYS Use the Release Workflow**
+
+   **❌ FORBIDDEN: Manual Tag Creation**
+   ```bash
+   # DO NOT DO THIS - will fail validate-tag.yml check
+   git tag v1.15.9
+   git push origin v1.15.9
+   ```
+
+   **✅ REQUIRED: Use GitHub Actions Release Workflow**
+   ```
+   1. Go to Actions → Release → Run workflow
+   2. Enter the new version number (e.g., 1.15.9)
+   3. The workflow automatically:
+      - Updates version in tagger, setup.py, and man page
+      - Commits the version bump
+      - Creates and pushes the tag
+      - Creates GitHub release
+      - Updates Homebrew formula with correct SHA256
+   ```
+
+   **Why this workflow is mandatory:**
+   - Ensures all version numbers are updated consistently
+   - Prevents human error in manual tag creation
+   - Automatically calculates SHA256 for Homebrew formula
+   - Creates proper GitHub release with notes
+   - validate-tag.yml will catch any manual tag creation mistakes
 
 ## Homebrew Formula Testing
 
