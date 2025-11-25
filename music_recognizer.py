@@ -67,7 +67,7 @@ class MusicRecognizer:
         self._check_dependencies()
 
     def _check_dependencies(self):
-        """Check if required libraries are installed"""
+        """Check if required libraries are installed and raise error if missing"""
         try:
             import acoustid
             import chromaprint
@@ -75,11 +75,6 @@ class MusicRecognizer:
             self.acoustid_available = True
         except ImportError:
             self.acoustid_available = False
-            if not self.shazam_only:
-                print(
-                    "Warning: acoustid/chromaprint not installed. Install with: pip install pyacoustid",
-                    file=sys.stderr,
-                )
 
         try:
             import shazamio
@@ -87,11 +82,42 @@ class MusicRecognizer:
             self.shazam_available = True
         except ImportError:
             self.shazam_available = False
-            if self.use_shazam or self.shazam_only:
-                print(
-                    "Warning: shazamio not installed. Install with: pip install shazamio",
-                    file=sys.stderr,
-                )
+
+        # If shazam_only mode but Shazam is not available, error
+        if self.shazam_only and not self.shazam_available:
+            print(
+                "Error: shazamio is not installed. Install with: pip install shazamio",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
+        # If acoustid_only mode but AcoustID is not available, error
+        if self.acoustid_only and not self.acoustid_available:
+            print(
+                "Error: acoustid/chromaprint is not installed. Install with: pip install pyacoustid",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
+        # If neither service is available, error
+        if not self.acoustid_available and not self.shazam_available:
+            print(
+                "Error: No music recognition services available.",
+                file=sys.stderr,
+            )
+            print(
+                "Install at least one of the following:",
+                file=sys.stderr,
+            )
+            print(
+                "  - AcoustID: pip install pyacoustid",
+                file=sys.stderr,
+            )
+            print(
+                "  - Shazam: pip install shazamio",
+                file=sys.stderr,
+            )
+            sys.exit(1)
 
     def recognize_file(
         self, audio_path: str, duration: int = 30
