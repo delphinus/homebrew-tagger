@@ -142,17 +142,18 @@ class MusicRecognizer:
             return None
 
         # Try AcoustID first (free, fast)
+        acoustid_result = None
         if self.acoustid_available and not self.shazam_only:
-            result = self._recognize_acoustid(audio_path, duration)
-            if result:
-                return result
+            acoustid_result = self._recognize_acoustid(audio_path, duration)
+            if acoustid_result:
+                return acoustid_result
 
-        # Fall back to Shazam if AcoustID failed and Shazam is enabled
-        if self.use_shazam and self.shazam_available:
-            print("  AcoustID failed, trying Shazam fallback...", file=sys.stderr)
-            result = self._recognize_shazam(audio_path)
-            if result:
-                return result
+        # Fall back to Shazam if AcoustID didn't find a match and Shazam is enabled
+        if self.use_shazam and self.shazam_available and not acoustid_result:
+            print("  No AcoustID match, trying Shazam fallback...", file=sys.stderr)
+            shazam_result = self._recognize_shazam(audio_path)
+            if shazam_result:
+                return shazam_result
 
         return None
 
