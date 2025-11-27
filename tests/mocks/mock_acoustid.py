@@ -176,6 +176,13 @@ def install_mock():
         >>> # Now 'import acoustid' will use the mock
     """
     import sys
+    from types import ModuleType
+
     # Use the current module (not re-import)
     current_module = sys.modules[__name__]
     sys.modules['acoustid'] = current_module
+
+    # Also mock chromaprint module (required by MusicRecognizer._check_dependencies)
+    chromaprint_mock = ModuleType('chromaprint')
+    chromaprint_mock.__version__ = '1.0.0'  # Fake version
+    sys.modules['chromaprint'] = chromaprint_mock
