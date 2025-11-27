@@ -280,6 +280,11 @@ class Tagger < Formula
     sha256 "1380560bdba02b6b6c90de54133c81c9f2a453dee9912fe58c1dcced1edb7cff"
   end
 
+  resource "propcache" do
+    url "https://files.pythonhosted.org/packages/5b/5a/bc7b4a4ef808fa59a816c17b20c4bef6884daebbdf627ff2a161da67da19/propcache-0.4.1-py3-none-any.whl"
+    sha256 "af2a6052aeb6cf17d3e46ee169099044fd8224cbaf75c76a2ef596e8163e2237"
+  end
+
   resource "aiosignal" do
     url "https://files.pythonhosted.org/packages/fb/76/641ae371508676492379f16e2fa48f4e2c11741bd63c48be4b12a6b09cba/aiosignal-1.4.0-py3-none-any.whl"
     sha256 "053243f8b92b990551949e63930a839ff0cf0b0ebbe0597b0f3fb19e1a0fe82e"
