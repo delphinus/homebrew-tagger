@@ -22,6 +22,8 @@ setup(
         "mutagen>=1.45.0",
         "PyYAML>=6.0",
         "pydantic>=2.0.0",
+        "pyacoustid>=1.3.0",  # For music recognition (AcoustID)
+        "shazamio>=0.8.0",  # For music recognition (Shazam fallback)
     ],
     extras_require={
         "segmentation": [
@@ -31,8 +33,6 @@ setup(
             "requests>=2.31.0",  # For SoundCloud URL fetching
             "beautifulsoup4>=4.12.0",  # For HTML parsing
             "tqdm>=4.66.0",  # For progress bars
-            "pyacoustid>=1.3.0",  # For music recognition (AcoustID)
-            "shazamio>=0.8.0",  # For music recognition (Shazam fallback)
         ],
         "test": [
             "pytest>=7.0.0",
