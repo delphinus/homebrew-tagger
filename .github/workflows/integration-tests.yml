@@ -43,8 +43,9 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
         pip install pytest pytest-timeout pytest-cov
-        # Optional dependencies for music recognition
-        pip install pyacoustid shazamio || echo "Optional dependencies not installed"
+        # Required dependencies for DJ mix segmentation and recognition
+        pip install librosa numpy
+        pip install pyacoustid shazamio
 
     - name: Verify NCS test fixtures
       run: |
