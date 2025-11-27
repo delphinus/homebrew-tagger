@@ -47,18 +47,21 @@ class MusicRecognizer:
     def __init__(
         self,
         api_key: Optional[str] = None,
-        use_shazam: bool = True,  # Enable Shazam fallback by default
-        shazam_only: bool = False,  # Manual override to use only Shazam
-        acoustid_only: bool = False,  # Manual override to use only AcoustID
+        use_shazam: bool = True,  # Deprecated: Shazam is always used as fallback
+        shazam_only: bool = False,  # Deprecated: Both services are required
+        acoustid_only: bool = False,  # Deprecated: Both services are required
     ):
         """
         Initialize the music recognizer.
 
+        Both AcoustID and Shazam are now required for reliable music recognition.
+        AcoustID is used first, with Shazam as automatic fallback.
+
         Args:
             api_key: Optional API key (currently unused, kept for compatibility)
-            use_shazam: Whether to use Shazam as fallback (default: True)
-            shazam_only: Use only Shazam API (skip AcoustID)
-            acoustid_only: Use only AcoustID (skip Shazam)
+            use_shazam: Deprecated - Shazam is always enabled as fallback
+            shazam_only: Deprecated - Both services are required
+            acoustid_only: Deprecated - Both services are required
         """
         self.api_key = api_key
         self.use_shazam = use_shazam and not acoustid_only
@@ -83,38 +86,31 @@ class MusicRecognizer:
         except ImportError:
             self.shazam_available = False
 
-        # If shazam_only mode but Shazam is not available, error
-        if self.shazam_only and not self.shazam_available:
-            print(
-                "Error: shazamio is not installed. Install with: pip install shazamio",
-                file=sys.stderr,
-            )
-            sys.exit(1)
+        # Both libraries are now required for reliable music recognition
+        # AcoustID is the primary service, Shazam is the fallback
+        missing_libraries = []
 
-        # If acoustid_only mode but AcoustID is not available, error
-        if self.acoustid_only and not self.acoustid_available:
-            print(
-                "Error: acoustid/chromaprint is not installed. Install with: pip install pyacoustid",
-                file=sys.stderr,
-            )
-            sys.exit(1)
+        if not self.acoustid_available:
+            missing_libraries.append("pyacoustid")
 
-        # If neither service is available, error
-        if not self.acoustid_available and not self.shazam_available:
+        if not self.shazam_available:
+            missing_libraries.append("shazamio")
+
+        if missing_libraries:
             print(
-                "Error: No music recognition services available.",
+                "Error: Required music recognition libraries are not installed.",
                 file=sys.stderr,
             )
             print(
-                "Install at least one of the following:",
+                "Missing: " + ", ".join(missing_libraries),
                 file=sys.stderr,
             )
             print(
-                "  - AcoustID: pip install pyacoustid",
+                "\nInstall with: pip install " + " ".join(missing_libraries),
                 file=sys.stderr,
             )
             print(
-                "  - Shazam: pip install shazamio",
+                "Or install all dependencies: pip install -e .",
                 file=sys.stderr,
             )
             sys.exit(1)
@@ -132,28 +128,16 @@ class MusicRecognizer:
         Returns:
             RecognitionResult or None if recognition failed
         """
-        # If shazam_only mode, skip AcoustID
-        if self.shazam_only:
-            if self.shazam_available:
-                print("  Using Shazam only mode...", file=sys.stderr)
-                result = self._recognize_shazam(audio_path)
-                if result:
-                    return result
-            return None
-
         # Try AcoustID first (free, fast)
-        acoustid_result = None
-        if self.acoustid_available and not self.shazam_only:
-            acoustid_result = self._recognize_acoustid(audio_path, duration)
-            if acoustid_result:
-                return acoustid_result
+        acoustid_result = self._recognize_acoustid(audio_path, duration)
+        if acoustid_result:
+            return acoustid_result
 
-        # Fall back to Shazam if AcoustID didn't find a match and Shazam is enabled
-        if self.use_shazam and self.shazam_available and not acoustid_result:
-            print("  No AcoustID match, trying Shazam fallback...", file=sys.stderr)
-            shazam_result = self._recognize_shazam(audio_path)
-            if shazam_result:
-                return shazam_result
+        # Fall back to Shazam if AcoustID didn't find a match
+        print("  No AcoustID match, trying Shazam fallback...", file=sys.stderr)
+        shazam_result = self._recognize_shazam(audio_path)
+        if shazam_result:
+            return shazam_result
 
         return None
 
