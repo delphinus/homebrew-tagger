@@ -138,3 +138,5 @@ tagger.yaml
 # But keep test fixtures
 !tests/fixtures/*.mp3
 !tests/fixtures/*.m4a
+!tests/fixtures/**/*.mp3
+!tests/fixtures/**/*.m4a

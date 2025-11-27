@@ -1,0 +1,86 @@
+name: Integration Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  # Allow manual triggering
+  workflow_dispatch:
+
+jobs:
+  integration-test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.13']
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y ffmpeg libchromaprint-tools
+
+    - name: Cache pip packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-integration-${{ hashFiles('**/requirements.txt', '**/setup.py') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-integration-
+          ${{ runner.os }}-pip-
+
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest pytest-timeout pytest-cov
+        # Required dependencies for DJ mix segmentation and recognition
+        pip install librosa numpy
+        pip install pyacoustid shazamio
+
+    - name: Verify NCS test fixtures
+      run: |
+        echo "Checking for NCS test tracks..."
+        ls -lh tests/fixtures/ncs/
+        test -f tests/fixtures/ncs/track1_tobu_candyland.mp3 || exit 1
+        test -f tests/fixtures/ncs/track2_spektrem_shine.mp3 || exit 1
+        test -f tests/fixtures/ncs/track3_different_heaven_my_heart.mp3 || exit 1
+        test -f tests/fixtures/ncs/metadata.json || exit 1
+        echo "✓ All NCS test tracks present"
+
+    - name: Run integration tests (with mocks)
+      env:
+        USE_MOCKS: "1"
+        PYTHONPATH: ${{ github.workspace }}
+      run: |
+        pytest tests/test_dj_mix_recognition.py \
+          -v \
+          --timeout=300 \
+          --tb=short
+
+    - name: Run integration tests (summary)
+      if: always()
+      run: |
+        echo "Integration test summary:"
+        echo "  Python version: ${{ matrix.python-version }}"
+        echo "  Test mode: MOCK (CI environment)"
+        echo "  System: Ubuntu Latest"
+
+    - name: Upload test artifacts on failure
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: integration-test-artifacts
+        path: |
+          /tmp/tmp*
+          *.log
+        retention-days: 7
