@@ -313,6 +313,8 @@ class Tagger:
 
         Supported patterns (spaces are flexible, 1+ spaces allowed):
         - Label - Artist - Title [ID].mp3 -> label="Label", artist="Artist", title="Title", bandcamp_id="ID"
+        - Label - Album - 01 Artist - Title.mp3 -> label="Label", album="Album", track=1, artist="Artist", title="Title"
+        - Label - Album - 01 - Title.mp3 -> label="Label", album="Album", track=1, title="Title"
         - 1. Artist - Title.mp3 -> track=1, artist="Artist", title="Title"
         - 01 Artist - Title.mp3 -> track=1, artist="Artist", title="Title"
         - 01  - Title.mp3 -> track=1, artist="", title="Title"
@@ -326,6 +328,7 @@ class Tagger:
         track = None
         artist = None
         title = None
+        album = None
         label = None
         bandcamp_id = None
 
@@ -345,6 +348,37 @@ class Tagger:
                 "bandcamp_id": bandcamp_id if bandcamp_id else None,
             }
 
+        # Pattern 0a: "Label - Album - 01 Artist - Title" (Label + Album + Track + Artist + Title)
+        match = re.match(r"^(.+?)\s+-\s+(.+?)\s+-\s+(\d+)\s+(.+?)\s+-\s+(.+)$", name)
+        if match:
+            label = match.group(1).strip()
+            album = match.group(2).strip()
+            track = int(match.group(3))
+            artist = match.group(4).strip()
+            title = match.group(5).strip()
+            return {
+                "track": track,
+                "artist": artist if artist else None,
+                "title": title if title else None,
+                "album": album if album else None,
+                "label": label if label else None,
+            }
+
+        # Pattern 0b: "Label - Album - 01 - Title" (Label + Album + Track + Title, no artist)
+        match = re.match(r"^(.+?)\s+-\s+(.+?)\s+-\s+(\d+)\s+-\s+(.+)$", name)
+        if match:
+            label = match.group(1).strip()
+            album = match.group(2).strip()
+            track = int(match.group(3))
+            title = match.group(4).strip()
+            return {
+                "track": track,
+                "artist": None,
+                "title": title if title else None,
+                "album": album if album else None,
+                "label": label if label else None,
+            }
+
         # Pattern 1: "1. Artist - Title" (track with dot + artist + title)
         match = re.match(r"^(\d+)\.\s+(.+?)\s+-\s+(.+)$", name)
         if match:
@@ -355,6 +389,7 @@ class Tagger:
                 "track": track,
                 "artist": artist if artist else None,
                 "title": title if title else None,
+                "album": None,
             }
 
         # Pattern 2: "01 Artist - Title" (track + artist + title)
@@ -367,6 +402,7 @@ class Tagger:
                 "track": track,
                 "artist": artist if artist else None,
                 "title": title if title else None,
+                "album": None,
             }
 
         # Pattern 3: "01  - Title" (track + title, no artist)
@@ -379,6 +415,7 @@ class Tagger:
                 "track": track,
                 "artist": None,
                 "title": title if title else None,
+                "album": None,
             }
 
         # Pattern 4: "01 Title" (track + title, no separator)
@@ -391,6 +428,7 @@ class Tagger:
                 "track": track,
                 "artist": None,
                 "title": title if title else None,
+                "album": None,
             }
 
         # Pattern 5: "Artist - Title" (artist + title, no track)
@@ -403,6 +441,7 @@ class Tagger:
                 "track": track,
                 "artist": artist if artist else None,
                 "title": title if title else None,
+                "album": None,
             }
 
         # Pattern 6: "Title" (title only)
@@ -411,6 +450,7 @@ class Tagger:
             "track": None,
             "artist": None,
             "title": title if title else None,
+            "album": None,
         }
 
     def read_tags(self, filepath: Path) -> dict[str, any]:
@@ -523,13 +563,14 @@ class Tagger:
         except Exception as e:
             self.log(f"Warning: Could not read tags from {filepath}: {e}")
 
-        # If track, artist, title, label, or bandcamp_id is missing, try to parse from filename
+        # If track, artist, title, album, label, or bandcamp_id is missing, try to parse from filename
         # Or if prefer_filename is True, always parse and use filename values
         if (
             self.prefer_filename
             or tags["track"] is None
             or tags["artist"] is None
             or tags["title"] is None
+            or tags["album"] is None
             or tags["label"] is None
             or tags["bandcamp_id"] is None
         ):
@@ -547,6 +588,10 @@ class Tagger:
                 "title"
             ) is not None:
                 tags["title"] = parsed["title"]
+            if (self.prefer_filename or tags["album"] is None) and parsed.get(
+                "album"
+            ) is not None:
+                tags["album"] = parsed["album"]
             if (self.prefer_filename or tags["label"] is None) and parsed.get(
                 "label"
             ) is not None:

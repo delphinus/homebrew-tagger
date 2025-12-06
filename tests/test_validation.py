@@ -215,6 +215,45 @@ class TestFilenameParsingPatterns:
         assert result["artist"] == "Artist"
         assert result["title"] == "Title"
 
+    def test_parse_label_album_track_artist_title_format(self):
+        """Test parsing 'Label - Album - 01 Artist - Title.mp3' format"""
+        tagger = Tagger()
+        result = tagger.parse_filename(
+            "Brutal Kuts - That Happy Hardcore Sound Volume 3 - 01 Beebop & Roksteady - Feel The Panic.mp3"
+        )
+
+        assert result["label"] == "Brutal Kuts"
+        assert result["album"] == "That Happy Hardcore Sound Volume 3"
+        assert result["track"] == 1
+        assert result["artist"] == "Beebop & Roksteady"
+        assert result["title"] == "Feel The Panic"
+
+    def test_parse_label_album_track_title_format(self):
+        """Test parsing 'Label - Album - 01 - Title.mp3' format (no artist)"""
+        tagger = Tagger()
+        result = tagger.parse_filename(
+            "Test Label - Test Album - 05 - Test Track.mp3"
+        )
+
+        assert result["label"] == "Test Label"
+        assert result["album"] == "Test Album"
+        assert result["track"] == 5
+        assert result["artist"] is None
+        assert result["title"] == "Test Track"
+
+    def test_parse_label_album_double_digit_track(self):
+        """Test parsing with double-digit track number"""
+        tagger = Tagger()
+        result = tagger.parse_filename(
+            "Record Label - Compilation Vol 1 - 12 DJ Example - Epic Mix.mp3"
+        )
+
+        assert result["label"] == "Record Label"
+        assert result["album"] == "Compilation Vol 1"
+        assert result["track"] == 12
+        assert result["artist"] == "DJ Example"
+        assert result["title"] == "Epic Mix"
+
 
 class TestBandcampSupport:
     """Test Bandcamp format support"""
