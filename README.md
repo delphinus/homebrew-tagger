@@ -69,17 +69,8 @@ ln -s $(pwd)/tagger /usr/local/bin/tagger
 - [pydantic](https://docs.pydantic.dev/) (automatically installed)
 - [yt-dlp](https://github.com/yt-dlp/yt-dlp) (automatically installed, for YouTube thumbnail fetching)
 - [requests](https://requests.readthedocs.io/) (automatically installed, for HTTP requests)
+- [Pillow](https://pillow.readthedocs.io/) (automatically installed, for YouTube thumbnail cropping)
 - [ffmpeg](https://ffmpeg.org/) (optional, required for .aac to .m4a conversion)
-
-### Optional: YouTube Thumbnail Support
-
-For YouTube thumbnail cropping functionality:
-
-```bash
-pip install -e ".[youtube]"
-```
-
-With Homebrew, Pillow is automatically installed via prebuilt wheels.
 
 ### Optional: DJ Mix Segmentation
 

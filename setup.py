@@ -26,7 +26,7 @@ setup(
         "shazamio>=0.8.0",  # For music recognition (Shazam fallback)
         "yt-dlp>=2024.0.0",  # For YouTube thumbnail fetching
         "requests>=2.31.0",  # For direct URL downloads (YouTube fallback, SoundCloud)
-        # Note: Pillow is installed via wheel in Homebrew formula to avoid relocation issues
+        "Pillow>=10.0.0",  # For YouTube thumbnail cropping
     ],
     extras_require={
         "segmentation": [
@@ -37,13 +37,13 @@ setup(
             "tqdm>=4.66.0",  # For progress bars
         ],
         "youtube": [
-            "Pillow>=10.0.0",  # For image cropping to square
+            # Pillow is now in install_requires (required dependency)
         ],
         "test": [
             "pytest>=7.0.0",
             "pytest-cov>=4.0.0",
             "psutil>=5.9.0",
-            "Pillow>=10.0.0",  # For YouTube thumbnail tests
+            # Pillow is now in install_requires (required dependency)
         ],
     },
     python_requires=">=3.10",
