@@ -25,8 +25,8 @@ setup(
         "pyacoustid>=1.3.0",  # For music recognition (AcoustID)
         "shazamio>=0.8.0",  # For music recognition (Shazam fallback)
         "yt-dlp>=2024.0.0",  # For YouTube thumbnail fetching
-        "Pillow>=10.0.0",  # For image cropping to square
         "requests>=2.31.0",  # For direct URL downloads (YouTube fallback, SoundCloud)
+        # Note: Pillow is installed via wheel in Homebrew formula to avoid relocation issues
     ],
     extras_require={
         "segmentation": [
@@ -35,6 +35,9 @@ setup(
             "pyperclip>=1.8.0",  # For clipboard support
             "beautifulsoup4>=4.12.0",  # For HTML parsing
             "tqdm>=4.66.0",  # For progress bars
+        ],
+        "youtube": [
+            "Pillow>=10.0.0",  # For image cropping to square
         ],
         "test": [
             "pytest>=7.0.0",
