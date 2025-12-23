@@ -12,6 +12,7 @@ Audio file tag and filename manager using [mutagen](https://mutagen.readthedocs.
 - Generate YAML from existing audio files
 - Dry-run mode by default to preview changes
 - **NEW:** DJ mix segmentation - automatically detect track boundaries and generate CUE sheets
+- **NEW:** YouTube thumbnail auto-fetching - automatically download and embed thumbnails from YouTube URLs
 
 ## Installation
 
@@ -66,6 +67,9 @@ ln -s $(pwd)/tagger /usr/local/bin/tagger
 - [mutagen](https://mutagen.readthedocs.io/) (automatically installed)
 - [PyYAML](https://pyyaml.org/) (automatically installed)
 - [pydantic](https://docs.pydantic.dev/) (automatically installed)
+- [yt-dlp](https://github.com/yt-dlp/yt-dlp) (automatically installed, for YouTube thumbnail fetching)
+- [Pillow](https://python-pillow.org/) (automatically installed, for image processing)
+- [requests](https://requests.readthedocs.io/) (automatically installed, for HTTP requests)
 - [ffmpeg](https://ffmpeg.org/) (optional, required for .aac to .m4a conversion)
 
 ### Optional: DJ Mix Segmentation
@@ -88,6 +92,40 @@ With Homebrew, these can be installed separately:
 # After installing tagger via Homebrew
 pip3 install librosa numpy pyperclip requests beautifulsoup4
 ```
+
+### YouTube Thumbnail Auto-Fetching
+
+Tagger automatically downloads and embeds YouTube thumbnails when generating YAML files.
+
+#### How it works
+
+When generating YAML from audio files with YouTube URLs in the comment field (e.g., files named `Artist - Song [VIDEO_ID].mp3`):
+
+1. Tagger extracts the YouTube video ID from the filename
+2. Stores the full YouTube URL in the comment tag
+3. Automatically downloads the video thumbnail
+4. Crops the thumbnail to a square aspect ratio (center crop)
+5. Saves it as `cover.jpg` (single file) or `youtube_VIDEO_ID.jpg` (multiple files)
+6. Sets the artwork field in the YAML to reference the thumbnail
+
+**Example:**
+
+```bash
+# File: Artist - Song [dQw4w9WgXcQ].mp3
+tagger --execute
+
+# Results:
+# - Creates cover.jpg (cropped to square)
+# - Generated YAML includes:
+#   - comment: https://www.youtube.com/watch?v=dQw4w9WgXcQ
+#   - artwork: cover.jpg
+```
+
+**Features:**
+- **Smart cropping**: Thumbnails are automatically cropped to square aspect ratio
+- **Deduplication**: Same video ID across multiple files downloads only once
+- **Graceful degradation**: Works without yt-dlp (uses direct URL with lower quality)
+- **No override**: Won't replace existing artwork
 
 ## Usage
 

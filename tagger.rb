@@ -14,6 +14,7 @@ class Tagger < Formula
   depends_on "ffmpeg"
   depends_on "libsndfile"
   depends_on "python@3.12"
+  depends_on "yt-dlp"
 
   # Optional dependencies for DJ mix segmentation feature
   # Users can install these manually with: pip install librosa numpy
@@ -70,6 +71,11 @@ class Tagger < Formula
       url "https://files.pythonhosted.org/packages/34/68/ba4f155f793a74c1483d4bdef136e1023f7bcba557f0db4ef3db3c665cf1/msgpack-1.1.2-cp312-cp312-macosx_11_0_arm64.whl"
       sha256 "446abdd8b94b55c800ac34b102dffd2f6aa0ce643c55dfc017ad89347db3dbdb"
     end
+
+    resource "pillow" do
+      url "https://files.pythonhosted.org/packages/e7/cf/5c558a0f247e0bf9cec92bff9b46ae6474dd736f6d906315e60e4075f737/pillow-10.4.0-cp312-cp312-macosx_11_0_arm64.whl"
+      sha256 "866b6942a92f56300012f5fbac71f2d610312ee65e22f1aa2609e491284e5597"
+    end
   end
 
   on_intel do
@@ -122,6 +128,11 @@ class Tagger < Formula
     resource "msgpack" do
       url "https://files.pythonhosted.org/packages/ad/bd/8b0d01c756203fbab65d265859749860682ccd2a59594609aeec3a144efa/msgpack-1.1.2-cp312-cp312-macosx_10_13_x86_64.whl"
       sha256 "70a0dff9d1f8da25179ffcf880e10cf1aad55fdb63cd59c9a49a1b82290062aa"
+    end
+
+    resource "pillow" do
+      url "https://files.pythonhosted.org/packages/05/cb/0353013dc30c02a8be34eb91d25e4e4cf594b59e5a55ea1128fde1e5f8ea/pillow-10.4.0-cp312-cp312-macosx_10_10_x86_64.whl"
+      sha256 "673655af3eadf4df6b5457033f086e90299fdd7a47983a13827acf7459c15d94"
     end
   end
 
@@ -392,6 +403,14 @@ class Tagger < Formula
 
     system libexec/"bin/python", "-c", "from shazamio import Shazam; " \
            "print('✓ All music recognition modules installed correctly')"
+
+    # Test YouTube thumbnail dependencies
+    # Verify yt-dlp is available (system-level dependency)
+    system "yt-dlp", "--version"
+
+    # Verify Pillow is installed in the virtualenv
+    system libexec/"bin/python", "-c", "from PIL import Image; " \
+           "print('✓ Pillow (PIL) installed correctly')"
 
     # Test man page installation
     assert_predicate man1/"tagger.1", :exist?, "Man page should be installed"

@@ -311,6 +311,145 @@ class Tagger:
 
         return converted_files
 
+    def extract_youtube_video_id(self, url: str) -> str | None:
+        """Extract YouTube video ID from URL
+
+        Supported URL patterns:
+        - https://www.youtube.com/watch?v=VIDEO_ID
+        - https://youtu.be/VIDEO_ID
+        - https://m.youtube.com/watch?v=VIDEO_ID
+
+        Returns:
+            Video ID (11 characters) if found, None otherwise
+        """
+        match = re.search(r'(?:youtube\.com/watch\?v=|youtu\.be/)([A-Za-z0-9_-]{11})', url)
+        return match.group(1) if match else None
+
+    def get_thumbnail_path_for_file(self, filepath: Path, video_id: str) -> Path:
+        """Determine thumbnail filename for a file
+
+        Naming strategy:
+        - Single file in directory: cover.jpg
+        - Multiple files: youtube_{VIDEO_ID}.jpg
+
+        Args:
+            filepath: Path to audio file
+            video_id: YouTube video ID
+
+        Returns:
+            Path to thumbnail file
+        """
+        directory = filepath.parent
+        audio_files = self.find_audio_files(str(directory))
+
+        if len(audio_files) == 1:
+            return directory / "cover.jpg"
+        else:
+            return directory / f"youtube_{video_id}.jpg"
+
+    def download_youtube_thumbnail(self, video_id: str, output_path: Path) -> bool:
+        """Download YouTube thumbnail and crop to square
+
+        Args:
+            video_id: YouTube video ID (11 characters)
+            output_path: Path where thumbnail should be saved
+
+        Returns:
+            True if successful, False otherwise
+        """
+        # Try yt-dlp first
+        try:
+            import yt_dlp
+
+            temp_path = output_path.with_suffix('')
+            ydl_opts = {
+                'skip_download': True,
+                'writethumbnail': True,
+                'outtmpl': str(temp_path),
+                'quiet': True,
+                'no_warnings': True,
+            }
+
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                url = f"https://www.youtube.com/watch?v={video_id}"
+                ydl.download([url])
+
+            # Find downloaded thumbnail (yt-dlp adds extension)
+            downloaded_files = list(temp_path.parent.glob(f"{temp_path.name}.*"))
+            if not downloaded_files:
+                raise Exception("Thumbnail not downloaded")
+
+            downloaded_path = downloaded_files[0]
+
+        except ImportError:
+            self.log("Note: yt-dlp not installed, using direct URL")
+            try:
+                import requests
+
+                # Try maxresdefault first, fallback to hqdefault
+                urls = [
+                    f'https://img.youtube.com/vi/{video_id}/maxresdefault.jpg',
+                    f'https://img.youtube.com/vi/{video_id}/hqdefault.jpg',
+                ]
+
+                downloaded_path = None
+                for url in urls:
+                    response = requests.get(url, timeout=10)
+                    if response.status_code == 200:
+                        temp_file = output_path.with_suffix('.tmp.jpg')
+                        with open(temp_file, 'wb') as f:
+                            f.write(response.content)
+                        downloaded_path = temp_file
+                        break
+
+                if not downloaded_path:
+                    return False
+
+            except ImportError:
+                self.log("Warning: Neither yt-dlp nor requests available")
+                return False
+            except Exception as e:
+                self.log(f"Warning: Failed to download thumbnail: {e}")
+                return False
+        except Exception as e:
+            self.log(f"Warning: yt-dlp failed: {e}")
+            return False
+
+        # Crop to square
+        try:
+            from PIL import Image
+
+            img = Image.open(downloaded_path)
+            width, height = img.size
+
+            # Crop to square (center crop)
+            if width > height:
+                left = (width - height) // 2
+                img_cropped = img.crop((left, 0, left + height, height))
+            else:
+                top = (height - width) // 2
+                img_cropped = img.crop((0, top, width, top + width))
+
+            # Save as JPEG
+            img_cropped.save(output_path, 'JPEG', quality=95)
+
+            # Clean up temporary file
+            if downloaded_path != output_path:
+                downloaded_path.unlink()
+
+        except ImportError:
+            self.log("Note: Pillow not installed, skipping square crop")
+            # Just rename/move the file
+            if downloaded_path != output_path:
+                shutil.move(str(downloaded_path), str(output_path))
+        except Exception as e:
+            self.log(f"Warning: Failed to crop thumbnail: {e}")
+            # Keep original if crop fails
+            if downloaded_path != output_path:
+                shutil.move(str(downloaded_path), str(output_path))
+
+        return True
+
     def parse_filename(self, filename: str) -> dict[str, any]:
         """Parse metadata from filename
 
@@ -1159,11 +1298,39 @@ class Tagger:
 
         # Read tags from all files
         entries = []
+        artwork_downloads = {}  # Track thumbnails to download (video_id: path)
+
         for filepath in files:
             tags = self.read_tags(filepath)
+
+            # Check for YouTube URL in comment field
+            comment = tags.get('comment')
+            if comment and 'youtube.com' in comment:
+                video_id = self.extract_youtube_video_id(comment)
+                if video_id:
+                    thumbnail_path = self.get_thumbnail_path_for_file(filepath, video_id)
+
+                    # Skip if thumbnail already exists
+                    if not thumbnail_path.exists():
+                        artwork_downloads[video_id] = thumbnail_path
+
+                    # Set artwork if not already present
+                    if not tags.get('artwork'):
+                        tags['artwork'] = str(thumbnail_path.name)  # Relative path
+
             # Remove None values
             entry = {k: v for k, v in tags.items() if v is not None}
             entries.append(entry)
+
+        # Download thumbnails (execute mode only)
+        if not self.dry_run and artwork_downloads:
+            self.log(f"Downloading {len(artwork_downloads)} YouTube thumbnail(s)...")
+            for idx, (video_id, path) in enumerate(artwork_downloads.items(), 1):
+                print(f"  [{idx}/{len(artwork_downloads)}] {video_id}...", end='', flush=True)
+                if self.download_youtube_thumbnail(video_id, path):
+                    print(" ✓")
+                else:
+                    print(" ✗ Failed")
 
         # Extract common fields to defaults
         common_fields = [

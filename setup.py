@@ -24,13 +24,15 @@ setup(
         "pydantic>=2.0.0",
         "pyacoustid>=1.3.0",  # For music recognition (AcoustID)
         "shazamio>=0.8.0",  # For music recognition (Shazam fallback)
+        "yt-dlp>=2024.0.0",  # For YouTube thumbnail fetching
+        "Pillow>=10.0.0",  # For image cropping to square
+        "requests>=2.31.0",  # For direct URL downloads (YouTube fallback, SoundCloud)
     ],
     extras_require={
         "segmentation": [
             "librosa>=0.10.0",
             "numpy>=1.24.0",
             "pyperclip>=1.8.0",  # For clipboard support
-            "requests>=2.31.0",  # For SoundCloud URL fetching
             "beautifulsoup4>=4.12.0",  # For HTML parsing
             "tqdm>=4.66.0",  # For progress bars
         ],
