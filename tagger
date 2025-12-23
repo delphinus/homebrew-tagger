@@ -359,10 +359,15 @@ class Tagger:
         Returns:
             True if successful, False otherwise
         """
-        # Try yt-dlp first
+        # yt-dlp is required for YouTube thumbnail downloads
         try:
             import yt_dlp
+        except ImportError:
+            self.log("Error: yt-dlp is required for YouTube thumbnail downloads")
+            self.log("Please install it with: pip install yt-dlp")
+            sys.exit(1)
 
+        try:
             temp_path = output_path.with_suffix("")
             ydl_opts = {
                 "skip_download": True,
@@ -383,44 +388,19 @@ class Tagger:
 
             downloaded_path = downloaded_files[0]
 
-        except ImportError:
-            self.log("Note: yt-dlp not installed, using direct URL")
-            try:
-                import requests
-
-                # Try maxresdefault first, fallback to hqdefault
-                urls = [
-                    f"https://img.youtube.com/vi/{video_id}/maxresdefault.jpg",
-                    f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg",
-                ]
-
-                downloaded_path = None
-                for url in urls:
-                    response = requests.get(url, timeout=10)
-                    if response.status_code == 200:
-                        temp_file = output_path.with_suffix(".tmp.jpg")
-                        with open(temp_file, "wb") as f:
-                            f.write(response.content)
-                        downloaded_path = temp_file
-                        break
-
-                if not downloaded_path:
-                    return False
-
-            except ImportError:
-                self.log("Warning: Neither yt-dlp nor requests available")
-                return False
-            except Exception as e:
-                self.log(f"Warning: Failed to download thumbnail: {e}")
-                return False
         except Exception as e:
-            self.log(f"Warning: yt-dlp failed: {e}")
+            self.log(f"Warning: Failed to download thumbnail: {e}")
             return False
 
-        # Crop to square
+        # Crop to square (Pillow is required)
         try:
             from PIL import Image
+        except ImportError:
+            self.log("Error: Pillow is required for YouTube thumbnail cropping")
+            self.log("Please install it with: pip install Pillow")
+            sys.exit(1)
 
+        try:
             img = Image.open(downloaded_path)
             width, height = img.size
 
@@ -439,11 +419,6 @@ class Tagger:
             if downloaded_path != output_path:
                 downloaded_path.unlink()
 
-        except ImportError:
-            self.log("Note: Pillow not installed, skipping square crop")
-            # Just rename/move the file
-            if downloaded_path != output_path:
-                shutil.move(str(downloaded_path), str(output_path))
         except Exception as e:
             self.log(f"Warning: Failed to crop thumbnail: {e}")
             # Keep original if crop fails
