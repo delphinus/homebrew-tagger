@@ -1180,7 +1180,10 @@ class Tagger:
                 self.log(f"  {field}: {error['msg']}")
             sys.exit(1)
 
-        # Generate YAML string
+        # Generate YAML string with schema comment
+        schema_url = "https://raw.githubusercontent.com/delphinus/homebrew-tagger/main/tagger.schema.json"
+        schema_comment = f"# yaml-language-server: $schema={schema_url}\n\n"
+
         yaml_str = yaml.dump(
             yaml_data, allow_unicode=True, default_flow_style=False, sort_keys=False
         )
@@ -1188,10 +1191,11 @@ class Tagger:
         if self.dry_run:
             self.log(f"Would create {output_file} with content:")
             print("\n" + "=" * 60)
-            print(yaml_str)
+            print(schema_comment + yaml_str)
             print("=" * 60)
         else:
             with open(output_file, "w", encoding="utf-8") as f:
+                f.write(schema_comment)
                 f.write(yaml_str)
             self.log(f"Created {output_file}")
 
