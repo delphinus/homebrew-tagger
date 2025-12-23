@@ -322,7 +322,9 @@ class Tagger:
         Returns:
             Video ID (11 characters) if found, None otherwise
         """
-        match = re.search(r'(?:youtube\.com/watch\?v=|youtu\.be/)([A-Za-z0-9_-]{11})', url)
+        match = re.search(
+            r"(?:youtube\.com/watch\?v=|youtu\.be/)([A-Za-z0-9_-]{11})", url
+        )
         return match.group(1) if match else None
 
     def get_thumbnail_path_for_file(self, filepath: Path, video_id: str) -> Path:
@@ -361,13 +363,13 @@ class Tagger:
         try:
             import yt_dlp
 
-            temp_path = output_path.with_suffix('')
+            temp_path = output_path.with_suffix("")
             ydl_opts = {
-                'skip_download': True,
-                'writethumbnail': True,
-                'outtmpl': str(temp_path),
-                'quiet': True,
-                'no_warnings': True,
+                "skip_download": True,
+                "writethumbnail": True,
+                "outtmpl": str(temp_path),
+                "quiet": True,
+                "no_warnings": True,
             }
 
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -388,16 +390,16 @@ class Tagger:
 
                 # Try maxresdefault first, fallback to hqdefault
                 urls = [
-                    f'https://img.youtube.com/vi/{video_id}/maxresdefault.jpg',
-                    f'https://img.youtube.com/vi/{video_id}/hqdefault.jpg',
+                    f"https://img.youtube.com/vi/{video_id}/maxresdefault.jpg",
+                    f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg",
                 ]
 
                 downloaded_path = None
                 for url in urls:
                     response = requests.get(url, timeout=10)
                     if response.status_code == 200:
-                        temp_file = output_path.with_suffix('.tmp.jpg')
-                        with open(temp_file, 'wb') as f:
+                        temp_file = output_path.with_suffix(".tmp.jpg")
+                        with open(temp_file, "wb") as f:
                             f.write(response.content)
                         downloaded_path = temp_file
                         break
@@ -431,7 +433,7 @@ class Tagger:
                 img_cropped = img.crop((0, top, width, top + width))
 
             # Save as JPEG
-            img_cropped.save(output_path, 'JPEG', quality=95)
+            img_cropped.save(output_path, "JPEG", quality=95)
 
             # Clean up temporary file
             if downloaded_path != output_path:
@@ -478,12 +480,12 @@ class Tagger:
 
         # Check for YouTube ID pattern [VIDEO_ID] at the end
         # YouTube IDs are typically 11 characters: alphanumeric, hyphens, underscores
-        youtube_match = re.search(r'\[([A-Za-z0-9_-]{11})\]$', name)
+        youtube_match = re.search(r"\[([A-Za-z0-9_-]{11})\]$", name)
         if youtube_match:
             video_id = youtube_match.group(1)
             comment = f"https://www.youtube.com/watch?v={video_id}"
             # Remove the [VIDEO_ID] part from the name for further parsing
-            name = name[:youtube_match.start()].strip()
+            name = name[: youtube_match.start()].strip()
 
         # Try patterns in order of specificity (spaces: 1+ allowed)
         # Pattern 0: "Label - Artist - Title [ID]" (Bandcamp format)
@@ -1304,19 +1306,21 @@ class Tagger:
             tags = self.read_tags(filepath)
 
             # Check for YouTube URL in comment field
-            comment = tags.get('comment')
-            if comment and 'youtube.com' in comment:
+            comment = tags.get("comment")
+            if comment and "youtube.com" in comment:
                 video_id = self.extract_youtube_video_id(comment)
                 if video_id:
-                    thumbnail_path = self.get_thumbnail_path_for_file(filepath, video_id)
+                    thumbnail_path = self.get_thumbnail_path_for_file(
+                        filepath, video_id
+                    )
 
                     # Skip if thumbnail already exists
                     if not thumbnail_path.exists():
                         artwork_downloads[video_id] = thumbnail_path
 
                     # Set artwork if not already present
-                    if not tags.get('artwork'):
-                        tags['artwork'] = str(thumbnail_path.name)  # Relative path
+                    if not tags.get("artwork"):
+                        tags["artwork"] = str(thumbnail_path.name)  # Relative path
 
             # Remove None values
             entry = {k: v for k, v in tags.items() if v is not None}
@@ -1326,7 +1330,11 @@ class Tagger:
         if not self.dry_run and artwork_downloads:
             self.log(f"Downloading {len(artwork_downloads)} YouTube thumbnail(s)...")
             for idx, (video_id, path) in enumerate(artwork_downloads.items(), 1):
-                print(f"  [{idx}/{len(artwork_downloads)}] {video_id}...", end='', flush=True)
+                print(
+                    f"  [{idx}/{len(artwork_downloads)}] {video_id}...",
+                    end="",
+                    flush=True,
+                )
                 if self.download_youtube_thumbnail(video_id, path):
                     print(" ✓")
                 else:
