@@ -809,6 +809,7 @@ class Tagger:
             max_track: Maximum track number (for padding). If None, uses 2 digits minimum.
         """
         track = tags.get("track", "")
+        disc = tags.get("disc", "")
         artist = tags.get("artist", "")
         title = tags.get("title", "Unknown Title")
 
@@ -823,14 +824,23 @@ class Tagger:
         else:
             padding = 2  # Default to 2 digits
 
+        # Build track prefix with optional disc number
+        # Disc number is always 2 digits: 01-01, 02-03, etc.
+        track_prefix = ""
+        if track:
+            if disc:
+                track_prefix = f"{disc:02d}-{track:0{padding}d}"
+            else:
+                track_prefix = f"{track:0{padding}d}"
+
         # Build filename based on available metadata
         # Hyphens use 1 space before and after, except track-only uses 2 spaces before hyphen
-        if track and artist:
-            # Format: 01 Artist - Title.mp3 (or 001, 0001, etc. based on max_track)
-            filename = f"{track:0{padding}d} {artist} - {title}{ext}"
-        elif track:
-            # Format: 01  - Title.mp3 (no artist, 2 spaces before hyphen)
-            filename = f"{track:0{padding}d}  - {title}{ext}"
+        if track_prefix and artist:
+            # Format: 01-01 Artist - Title.mp3 (with disc) or 01 Artist - Title.mp3 (without disc)
+            filename = f"{track_prefix} {artist} - {title}{ext}"
+        elif track_prefix:
+            # Format: 01-01  - Title.mp3 (no artist, 2 spaces before hyphen)
+            filename = f"{track_prefix}  - {title}{ext}"
         elif artist:
             # Format: Artist - Title.mp3 (no track)
             filename = f"{artist} - {title}{ext}"
