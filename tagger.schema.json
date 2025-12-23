@@ -47,6 +47,10 @@
           "type": "integer",
           "description": "Disc number for multi-disc albums",
           "minimum": 1
+        },
+        "comment": {
+          "type": "string",
+          "description": "Comment or URL (e.g., YouTube URL from filename)"
         }
       },
       "additionalProperties": false
@@ -113,6 +117,10 @@
             "type": "integer",
             "description": "Disc number (overrides default)",
             "minimum": 1
+          },
+          "comment": {
+            "type": "string",
+            "description": "Comment or URL (e.g., YouTube URL from filename) (overrides default)"
           }
         },
         "required": ["filename"],

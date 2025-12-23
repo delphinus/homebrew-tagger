@@ -22,6 +22,7 @@ import yaml
 try:
     from mutagen.id3 import (
         APIC,
+        COMM,
         ID3,
         TALB,
         TCMP,
@@ -68,6 +69,7 @@ class Defaults(BaseModel):
     label: str | None = None
     bandcamp_id: str | None = None
     disc: int | None = None
+    comment: str | None = None
 
     @field_validator("year")
     @classmethod
@@ -104,6 +106,7 @@ class FileEntry(BaseModel):
     label: str | None = None
     bandcamp_id: str | None = None
     disc: int | None = None
+    comment: str | None = None
 
     @field_validator("track")
     @classmethod
@@ -315,6 +318,7 @@ class Tagger:
         - Label - Artist - Title [ID].mp3 -> label="Label", artist="Artist", title="Title", bandcamp_id="ID"
         - Label - Album - 01 Artist - Title.mp3 -> label="Label", album="Album", track=1, artist="Artist", title="Title"
         - Label - Album - 01 - Title.mp3 -> label="Label", album="Album", track=1, title="Title"
+        - Artist - Title [YOUTUBE_ID].mp3 -> artist="Artist", title="Title", comment="https://www.youtube.com/watch?v=YOUTUBE_ID"
         - 1. Artist - Title.mp3 -> track=1, artist="Artist", title="Title"
         - 01 Artist - Title.mp3 -> track=1, artist="Artist", title="Title"
         - 01  - Title.mp3 -> track=1, artist="", title="Title"
@@ -331,6 +335,16 @@ class Tagger:
         album = None
         label = None
         bandcamp_id = None
+        comment = None
+
+        # Check for YouTube ID pattern [VIDEO_ID] at the end
+        # YouTube IDs are typically 11 characters: alphanumeric, hyphens, underscores
+        youtube_match = re.search(r'\[([A-Za-z0-9_-]{11})\]$', name)
+        if youtube_match:
+            video_id = youtube_match.group(1)
+            comment = f"https://www.youtube.com/watch?v={video_id}"
+            # Remove the [VIDEO_ID] part from the name for further parsing
+            name = name[:youtube_match.start()].strip()
 
         # Try patterns in order of specificity (spaces: 1+ allowed)
         # Pattern 0: "Label - Artist - Title [ID]" (Bandcamp format)
@@ -346,6 +360,7 @@ class Tagger:
                 "title": title if title else None,
                 "label": label if label else None,
                 "bandcamp_id": bandcamp_id if bandcamp_id else None,
+                "comment": comment,
             }
 
         # Pattern 0a: "Label - Album - 01 Artist - Title" (Label + Album + Track + Artist + Title)
@@ -362,6 +377,7 @@ class Tagger:
                 "title": title if title else None,
                 "album": album if album else None,
                 "label": label if label else None,
+                "comment": comment,
             }
 
         # Pattern 0b: "Label - Album - 01 - Title" (Label + Album + Track + Title, no artist)
@@ -377,6 +393,7 @@ class Tagger:
                 "title": title if title else None,
                 "album": album if album else None,
                 "label": label if label else None,
+                "comment": comment,
             }
 
         # Pattern 1: "1. Artist - Title" (track with dot + artist + title)
@@ -390,6 +407,7 @@ class Tagger:
                 "artist": artist if artist else None,
                 "title": title if title else None,
                 "album": None,
+                "comment": comment,
             }
 
         # Pattern 2: "01 Artist - Title" (track + artist + title)
@@ -403,6 +421,7 @@ class Tagger:
                 "artist": artist if artist else None,
                 "title": title if title else None,
                 "album": None,
+                "comment": comment,
             }
 
         # Pattern 3: "01  - Title" (track + title, no artist)
@@ -416,6 +435,7 @@ class Tagger:
                 "artist": None,
                 "title": title if title else None,
                 "album": None,
+                "comment": comment,
             }
 
         # Pattern 4: "01 Title" (track + title, no separator)
@@ -429,6 +449,7 @@ class Tagger:
                 "artist": None,
                 "title": title if title else None,
                 "album": None,
+                "comment": comment,
             }
 
         # Pattern 5: "Artist - Title" (artist + title, no track)
@@ -442,6 +463,7 @@ class Tagger:
                 "artist": artist if artist else None,
                 "title": title if title else None,
                 "album": None,
+                "comment": comment,
             }
 
         # Pattern 6: "Title" (title only)
@@ -451,6 +473,7 @@ class Tagger:
             "artist": None,
             "title": title if title else None,
             "album": None,
+            "comment": comment,
         }
 
     def read_tags(self, filepath: Path) -> dict[str, any]:
@@ -470,6 +493,7 @@ class Tagger:
             "label": None,
             "bandcamp_id": None,
             "disc": None,
+            "comment": None,
         }
 
         try:
@@ -523,6 +547,12 @@ class Tagger:
                     if "TXXX:BANDCAMP_ID" in audio.tags:
                         tags["bandcamp_id"] = str(audio.tags["TXXX:BANDCAMP_ID"])
 
+                    # Comment (COMM frame)
+                    if "COMM::eng" in audio.tags:
+                        tags["comment"] = str(audio.tags["COMM::eng"])
+                    elif "COMM::" in audio.tags:
+                        tags["comment"] = str(audio.tags["COMM::"])
+
             elif ext == ".m4a":
                 audio = MP4(str(filepath))
                 if audio.tags:
@@ -550,6 +580,10 @@ class Tagger:
                     if "covr" in audio.tags:
                         tags["artwork"] = "<embedded>"
 
+                    # Comment
+                    if "\xa9cmt" in audio.tags:
+                        tags["comment"] = audio.tags["\xa9cmt"][0]
+
                     # Custom tags (freeform)
                     if "----:com.apple.iTunes:LABEL" in audio.tags:
                         tags["label"] = audio.tags["----:com.apple.iTunes:LABEL"][
@@ -563,7 +597,7 @@ class Tagger:
         except Exception as e:
             self.log(f"Warning: Could not read tags from {filepath}: {e}")
 
-        # If track, artist, title, album, label, or bandcamp_id is missing, try to parse from filename
+        # If track, artist, title, album, label, bandcamp_id, or comment is missing, try to parse from filename
         # Or if prefer_filename is True, always parse and use filename values
         if (
             self.prefer_filename
@@ -573,6 +607,7 @@ class Tagger:
             or tags["album"] is None
             or tags["label"] is None
             or tags["bandcamp_id"] is None
+            or tags["comment"] is None
         ):
             parsed = self.parse_filename(filepath.name)
 
@@ -600,6 +635,10 @@ class Tagger:
                 "bandcamp_id"
             ) is not None:
                 tags["bandcamp_id"] = parsed["bandcamp_id"]
+            if (self.prefer_filename or tags["comment"] is None) and parsed.get(
+                "comment"
+            ) is not None:
+                tags["comment"] = parsed["comment"]
 
         return tags
 
@@ -626,6 +665,7 @@ class Tagger:
             "bandcamp_id",
             "artwork",
             "disc",
+            "comment",
         ]
 
         for field in comparable_fields:
@@ -709,6 +749,12 @@ class Tagger:
                         TXXX(encoding=3, desc="BANDCAMP_ID", text=tags["bandcamp_id"])
                     )
 
+                # Comment
+                if tags.get("comment"):
+                    audio.tags.add(
+                        COMM(encoding=3, lang="eng", desc="", text=tags["comment"])
+                    )
+
                 # Artwork
                 if tags.get("artwork") and tags["artwork"] != "<embedded>":
                     artwork_path = Path(tags["artwork"])
@@ -753,6 +799,10 @@ class Tagger:
                     audio.tags["disk"] = [(tags["disc"], 0)]
                 if tags.get("compilation") is not None:
                     audio.tags["cpil"] = [tags["compilation"]]
+
+                # Comment
+                if tags.get("comment"):
+                    audio.tags["\xa9cmt"] = tags["comment"]
 
                 # Custom tags
                 if tags.get("label"):
@@ -1126,6 +1176,7 @@ class Tagger:
             "label",
             "bandcamp_id",
             "disc",
+            "comment",
         ]
         defaults = {}
 
