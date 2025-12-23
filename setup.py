@@ -43,6 +43,7 @@ setup(
             "pytest>=7.0.0",
             "pytest-cov>=4.0.0",
             "psutil>=5.9.0",
+            "Pillow>=10.0.0",  # For YouTube thumbnail tests
         ],
     },
     python_requires=">=3.10",
