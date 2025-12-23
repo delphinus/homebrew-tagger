@@ -922,8 +922,8 @@ class TestDiscNumberSupport:
         tagger = Tagger(execute=True)
         tagger.apply_yaml("test.yaml")
 
-        # Verify disc number was applied
-        tags = tagger.read_tags(Path("01 Test Artist - Test Title.mp3"))
+        # Verify disc number was applied (filename now includes disc number)
+        tags = tagger.read_tags(Path("01-01 Test Artist - Test Title.mp3"))
         assert tags["disc"] == 1
 
     def test_disc_number_m4a(self):
@@ -958,8 +958,8 @@ class TestDiscNumberSupport:
         tagger = Tagger(execute=True)
         tagger.apply_yaml("test.yaml")
 
-        # Verify disc number was applied
-        tags = tagger.read_tags(Path("01 M4A Artist - M4A Title.m4a"))
+        # Verify disc number was applied (filename now includes disc number)
+        tags = tagger.read_tags(Path("02-01 M4A Artist - M4A Title.m4a"))
         assert tags["disc"] == 2
 
     def test_disc_number_in_generated_yaml(self):
@@ -995,3 +995,272 @@ class TestDiscNumberSupport:
             data.get("defaults", {}).get("disc") == 1
             or data["files"][0].get("disc") == 1
         )
+
+    def test_disc_number_in_filename(self):
+        """Test that disc number appears in filename as 2-digit prefix"""
+        # Copy dummy MP3 to test directory
+        src_mp3 = self.fixtures_dir / "dummy.mp3"
+        test_mp3 = Path(self.test_dir) / "test.mp3"
+        shutil.copy(src_mp3, test_mp3)
+
+        # Create YAML config with disc number
+        yaml_config = {
+            "defaults": {
+                "album": "Multi-Disc Album",
+            },
+            "files": [
+                {
+                    "filename": "test.mp3",
+                    "disc": 1,
+                    "track": 3,
+                    "artist": "Test Artist",
+                    "title": "Test Title",
+                }
+            ],
+        }
+
+        yaml_file = Path(self.test_dir) / "test.yaml"
+        with open(yaml_file, "w") as f:
+            yaml.dump(yaml_config, f)
+
+        # Apply tags
+        os.chdir(self.test_dir)
+        tagger = Tagger(execute=True)
+        tagger.apply_yaml("test.yaml")
+
+        # Verify filename includes disc number as 01-03
+        expected_filename = "01-03 Test Artist - Test Title.mp3"
+        assert Path(expected_filename).exists()
+
+        # Verify tags were applied
+        tags = tagger.read_tags(Path(expected_filename))
+        assert tags["disc"] == 1
+        assert tags["track"] == 3
+
+    def test_disc_number_in_filename_without_artist(self):
+        """Test disc number in filename when artist is not specified"""
+        # Copy dummy MP3 to test directory
+        src_mp3 = self.fixtures_dir / "dummy.mp3"
+        test_mp3 = Path(self.test_dir) / "test.mp3"
+        shutil.copy(src_mp3, test_mp3)
+
+        # Create YAML config with disc number but no artist
+        yaml_config = {
+            "files": [
+                {
+                    "filename": "test.mp3",
+                    "disc": 2,
+                    "track": 5,
+                    "title": "Title Only",
+                }
+            ],
+        }
+
+        yaml_file = Path(self.test_dir) / "test.yaml"
+        with open(yaml_file, "w") as f:
+            yaml.dump(yaml_config, f)
+
+        # Apply tags
+        os.chdir(self.test_dir)
+        tagger = Tagger(execute=True)
+        tagger.apply_yaml("test.yaml")
+
+        # Verify filename includes disc number as 02-05 with double space before hyphen
+        expected_filename = "02-05  - Title Only.mp3"
+        assert Path(expected_filename).exists()
+
+    def test_disc_number_padding(self):
+        """Test that disc number is always 2 digits"""
+        # Copy dummy MP3 to test directory
+        src_mp3 = self.fixtures_dir / "dummy.mp3"
+        test_mp3 = Path(self.test_dir) / "test.mp3"
+        shutil.copy(src_mp3, test_mp3)
+
+        # Create YAML config with single-digit disc number
+        yaml_config = {
+            "files": [
+                {
+                    "filename": "test.mp3",
+                    "disc": 9,
+                    "track": 1,
+                    "artist": "Artist",
+                    "title": "Title",
+                }
+            ],
+        }
+
+        yaml_file = Path(self.test_dir) / "test.yaml"
+        with open(yaml_file, "w") as f:
+            yaml.dump(yaml_config, f)
+
+        # Apply tags
+        os.chdir(self.test_dir)
+        tagger = Tagger(execute=True)
+        tagger.apply_yaml("test.yaml")
+
+        # Verify disc number is padded to 09
+        expected_filename = "09-01 Artist - Title.mp3"
+        assert Path(expected_filename).exists()
+
+    def test_no_disc_number_in_filename(self):
+        """Test that filename without disc number remains unchanged"""
+        # Copy dummy MP3 to test directory
+        src_mp3 = self.fixtures_dir / "dummy.mp3"
+        test_mp3 = Path(self.test_dir) / "test.mp3"
+        shutil.copy(src_mp3, test_mp3)
+
+        # Create YAML config without disc number
+        yaml_config = {
+            "files": [
+                {
+                    "filename": "test.mp3",
+                    "track": 1,
+                    "artist": "Artist",
+                    "title": "Title",
+                }
+            ],
+        }
+
+        yaml_file = Path(self.test_dir) / "test.yaml"
+        with open(yaml_file, "w") as f:
+            yaml.dump(yaml_config, f)
+
+        # Apply tags
+        os.chdir(self.test_dir)
+        tagger = Tagger(execute=True)
+        tagger.apply_yaml("test.yaml")
+
+        # Verify filename does not include disc number
+        expected_filename = "01 Artist - Title.mp3"
+        assert Path(expected_filename).exists()
+
+    def test_multi_disc_album_with_different_disc_numbers(self):
+        """Test multiple files with different disc numbers"""
+        # Copy dummy MP3s to test directory
+        src_mp3 = self.fixtures_dir / "dummy.mp3"
+        test_mp3_1 = Path(self.test_dir) / "disc1.mp3"
+        test_mp3_2 = Path(self.test_dir) / "disc2.mp3"
+        shutil.copy(src_mp3, test_mp3_1)
+        shutil.copy(src_mp3, test_mp3_2)
+
+        # Create YAML config with different disc numbers
+        yaml_config = {
+            "defaults": {
+                "album": "Multi-Disc Album",
+            },
+            "files": [
+                {
+                    "filename": "disc1.mp3",
+                    "disc": 1,
+                    "track": 1,
+                    "artist": "Artist",
+                    "title": "Disc 1 Track 1",
+                },
+                {
+                    "filename": "disc2.mp3",
+                    "disc": 2,
+                    "track": 1,
+                    "artist": "Artist",
+                    "title": "Disc 2 Track 1",
+                },
+            ],
+        }
+
+        yaml_file = Path(self.test_dir) / "test.yaml"
+        with open(yaml_file, "w") as f:
+            yaml.dump(yaml_config, f)
+
+        # Apply tags
+        os.chdir(self.test_dir)
+        tagger = Tagger(execute=True)
+        tagger.apply_yaml("test.yaml")
+
+        # Verify filenames include different disc numbers
+        expected_filename_1 = "01-01 Artist - Disc 1 Track 1.mp3"
+        expected_filename_2 = "02-01 Artist - Disc 2 Track 1.mp3"
+        assert Path(expected_filename_1).exists()
+        assert Path(expected_filename_2).exists()
+
+
+class TestYouTubeThumbnailIntegration:
+    """Integration tests for YouTube thumbnail auto-fetching"""
+
+    def setup_method(self):
+        """Set up test environment with temporary directory"""
+        self.test_dir = tempfile.mkdtemp()
+        self.fixtures_dir = Path(__file__).parent / "fixtures"
+
+    def teardown_method(self):
+        """Clean up temporary directory"""
+        shutil.rmtree(self.test_dir)
+
+    def test_youtube_thumbnail_workflow(self):
+        """Test complete workflow: parse filename → generate YAML → download thumbnail"""
+        from unittest.mock import Mock, patch
+
+        # Copy file with YouTube ID in filename
+        src_mp3 = self.fixtures_dir / "dummy.mp3"
+        test_mp3 = Path(self.test_dir) / "Artist - Song [dQw4w9WgXcQ].mp3"
+        shutil.copy(src_mp3, test_mp3)
+
+        os.chdir(self.test_dir)
+        tagger = Tagger(execute=True)
+
+        # Mock the download to avoid network call
+        with patch.object(tagger, 'download_youtube_thumbnail') as mock_download:
+            mock_download.return_value = True
+
+            # Generate YAML (non-interactive)
+            tagger.generate_yaml("generated.yaml", interactive=False)
+
+        # Load and verify YAML
+        with open("generated.yaml", "r") as f:
+            lines = f.readlines()
+            yaml_content = "".join([l for l in lines if not l.startswith("# yaml-language-server:")])
+            data = yaml.safe_load(yaml_content)
+
+        # Verify comment field has YouTube URL
+        assert data["files"][0]["comment"] == "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+
+        # Verify artwork field is set to thumbnail filename
+        assert data["files"][0]["artwork"] == "cover.jpg"
+
+    def test_youtube_thumbnail_square_aspect(self):
+        """Test that downloaded thumbnails are cropped to square aspect ratio"""
+        from unittest.mock import Mock, patch
+        from PIL import Image
+        import yt_dlp
+
+        # Create a fake landscape image (16:9)
+        fake_img = Image.new('RGB', (1280, 720), color='red')
+
+        # Copy file with YouTube ID
+        src_mp3 = self.fixtures_dir / "dummy.mp3"
+        test_mp3 = Path(self.test_dir) / "Test [TEtLwnrhn5U].mp3"
+        shutil.copy(src_mp3, test_mp3)
+
+        os.chdir(self.test_dir)
+        tagger = Tagger(execute=True)
+
+        # Create a temporary downloaded file (simulating yt-dlp download)
+        temp_file = Path(self.test_dir) / "cover.webp"
+        fake_img.save(temp_file, format='JPEG')
+
+        # Mock yt-dlp and Path.glob to simulate download
+        with patch('yt_dlp.YoutubeDL') as mock_ytdlp, \
+             patch('pathlib.Path.glob', return_value=[temp_file]):
+
+            mock_ydl = Mock()
+            mock_ytdlp.return_value.__enter__.return_value = mock_ydl
+
+            output_path = Path(self.test_dir) / "output.jpg"
+            result = tagger.download_youtube_thumbnail("TEtLwnrhn5U", output_path)
+
+        assert result is True
+        assert output_path.exists()
+
+        # Verify the output is square
+        output_img = Image.open(output_path)
+        width, height = output_img.size
+        assert width == height, f"Image should be square, got {width}x{height}"
+        assert width == 720, f"Expected width 720 (cropped from 1280x720), got {width}"

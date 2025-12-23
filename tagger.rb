@@ -14,6 +14,7 @@ class Tagger < Formula
   depends_on "ffmpeg"
   depends_on "libsndfile"
   depends_on "python@3.12"
+  depends_on "yt-dlp"
 
   # Optional dependencies for DJ mix segmentation feature
   # Users can install these manually with: pip install librosa numpy
@@ -70,6 +71,8 @@ class Tagger < Formula
       url "https://files.pythonhosted.org/packages/34/68/ba4f155f793a74c1483d4bdef136e1023f7bcba557f0db4ef3db3c665cf1/msgpack-1.1.2-cp312-cp312-macosx_11_0_arm64.whl"
       sha256 "446abdd8b94b55c800ac34b102dffd2f6aa0ce643c55dfc017ad89347db3dbdb"
     end
+
+    # Pillow is now in install_requires and will be installed automatically by pip
   end
 
   on_intel do
@@ -123,6 +126,8 @@ class Tagger < Formula
       url "https://files.pythonhosted.org/packages/ad/bd/8b0d01c756203fbab65d265859749860682ccd2a59594609aeec3a144efa/msgpack-1.1.2-cp312-cp312-macosx_10_13_x86_64.whl"
       sha256 "70a0dff9d1f8da25179ffcf880e10cf1aad55fdb63cd59c9a49a1b82290062aa"
     end
+
+    # Pillow is now in install_requires and will be installed automatically by pip
   end
 
   skip_clean "libexec"
@@ -392,6 +397,14 @@ class Tagger < Formula
 
     system libexec/"bin/python", "-c", "from shazamio import Shazam; " \
            "print('✓ All music recognition modules installed correctly')"
+
+    # Test YouTube thumbnail dependencies
+    # Verify yt-dlp is available (system-level dependency)
+    system "yt-dlp", "--version"
+
+    # Verify Pillow is installed (via install_requires)
+    system libexec/"bin/python", "-c", "from PIL import Image; " \
+           "print('✓ Pillow (PIL) installed correctly')"
 
     # Test man page installation
     assert_predicate man1/"tagger.1", :exist?, "Man page should be installed"

@@ -1,0 +1,133 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/delphinus/homebrew-tagger/main/tagger.schema.json",
+  "title": "Tagger Configuration",
+  "description": "Configuration file for tagger - audio file tag and filename manager",
+  "type": "object",
+  "properties": {
+    "defaults": {
+      "description": "Default values applied to all files",
+      "type": "object",
+      "properties": {
+        "album": {
+          "type": "string",
+          "description": "Album name"
+        },
+        "albumartist": {
+          "type": "string",
+          "description": "Album artist name"
+        },
+        "genre": {
+          "type": "string",
+          "description": "Music genre"
+        },
+        "year": {
+          "type": "integer",
+          "description": "Release year",
+          "minimum": 1900,
+          "maximum": 2100
+        },
+        "artwork": {
+          "type": "string",
+          "description": "Path to artwork file or '<embedded>' for existing artwork"
+        },
+        "compilation": {
+          "type": "boolean",
+          "description": "Whether this is a compilation album"
+        },
+        "label": {
+          "type": "string",
+          "description": "Record label"
+        },
+        "bandcamp_id": {
+          "type": "string",
+          "description": "Bandcamp track ID"
+        },
+        "disc": {
+          "type": "integer",
+          "description": "Disc number for multi-disc albums",
+          "minimum": 1
+        },
+        "comment": {
+          "type": "string",
+          "description": "Comment or URL (e.g., YouTube URL from filename)"
+        }
+      },
+      "additionalProperties": false
+    },
+    "files": {
+      "description": "List of audio files to process",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "properties": {
+          "filename": {
+            "type": "string",
+            "description": "Original filename (required)"
+          },
+          "track": {
+            "type": "integer",
+            "description": "Track number",
+            "minimum": 1
+          },
+          "artist": {
+            "type": "string",
+            "description": "Artist name"
+          },
+          "title": {
+            "type": "string",
+            "description": "Track title"
+          },
+          "album": {
+            "type": "string",
+            "description": "Album name (overrides default)"
+          },
+          "albumartist": {
+            "type": "string",
+            "description": "Album artist name (overrides default)"
+          },
+          "genre": {
+            "type": "string",
+            "description": "Music genre (overrides default)"
+          },
+          "year": {
+            "type": "integer",
+            "description": "Release year (overrides default)",
+            "minimum": 1900,
+            "maximum": 2100
+          },
+          "artwork": {
+            "type": "string",
+            "description": "Path to artwork file (overrides default)"
+          },
+          "compilation": {
+            "type": "boolean",
+            "description": "Whether this is a compilation (overrides default)"
+          },
+          "label": {
+            "type": "string",
+            "description": "Record label (overrides default)"
+          },
+          "bandcamp_id": {
+            "type": "string",
+            "description": "Bandcamp track ID (overrides default)"
+          },
+          "disc": {
+            "type": "integer",
+            "description": "Disc number (overrides default)",
+            "minimum": 1
+          },
+          "comment": {
+            "type": "string",
+            "description": "Comment or URL (e.g., YouTube URL from filename) (overrides default)"
+          }
+        },
+        "required": ["filename"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["files"],
+  "additionalProperties": false
+}

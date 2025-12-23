@@ -24,20 +24,26 @@ setup(
         "pydantic>=2.0.0",
         "pyacoustid>=1.3.0",  # For music recognition (AcoustID)
         "shazamio>=0.8.0",  # For music recognition (Shazam fallback)
+        "yt-dlp>=2024.0.0",  # For YouTube thumbnail fetching
+        "requests>=2.31.0",  # For direct URL downloads (YouTube fallback, SoundCloud)
+        "Pillow>=10.0.0",  # For YouTube thumbnail cropping
     ],
     extras_require={
         "segmentation": [
             "librosa>=0.10.0",
             "numpy>=1.24.0",
             "pyperclip>=1.8.0",  # For clipboard support
-            "requests>=2.31.0",  # For SoundCloud URL fetching
             "beautifulsoup4>=4.12.0",  # For HTML parsing
             "tqdm>=4.66.0",  # For progress bars
+        ],
+        "youtube": [
+            # Pillow is now in install_requires (required dependency)
         ],
         "test": [
             "pytest>=7.0.0",
             "pytest-cov>=4.0.0",
             "psutil>=5.9.0",
+            # Pillow is now in install_requires (required dependency)
         ],
     },
     python_requires=">=3.10",
