@@ -14,7 +14,6 @@ class Tagger < Formula
   depends_on "ffmpeg"
   depends_on "libsndfile"
   depends_on "python@3.12"
-  depends_on "yt-dlp"
 
   # Optional dependencies for DJ mix segmentation feature
   # Users can install these manually with: pip install librosa numpy
@@ -150,6 +149,17 @@ class Tagger < Formula
   resource "pydantic" do
     url "https://files.pythonhosted.org/packages/62/51/72c18c55cf2f46ff4f91ebcc8f75aa30f7305f3d726be3f4ebffb4ae972b/pydantic-2.10.3-py3-none-any.whl"
     sha256 "be04d85bbc7b65651c5f8e6b9976ed9c6f41782a55524cef079a34a0bb82144d"
+  end
+
+  # YouTube thumbnail dependencies
+  resource "yt-dlp" do
+    url "https://files.pythonhosted.org/packages/source/y/yt-dlp/yt_dlp-2025.12.8.tar.gz"
+    sha256 "b773c81bb6b71cb2c111cfb859f453c7a71cf2ef44eff234ff155877184c3e4f"
+  end
+
+  resource "pillow" do
+    url "https://files.pythonhosted.org/packages/source/p/pillow/pillow-12.0.0.tar.gz"
+    sha256 "87d4f8125c9988bfbed67af47dd7a953e2fc7b0cc1e7800ec6d2080d490bb353"
   end
 
   # DJ mix segmentation dependencies (pure Python packages)
@@ -399,10 +409,11 @@ class Tagger < Formula
            "print('✓ All music recognition modules installed correctly')"
 
     # Test YouTube thumbnail dependencies
-    # Verify yt-dlp is available (system-level dependency)
-    system "yt-dlp", "--version"
+    # Verify yt-dlp is installed in virtualenv
+    system libexec/"bin/python", "-c", "import yt_dlp; " \
+           "print('✓ yt-dlp installed correctly')"
 
-    # Verify Pillow is installed (via install_requires)
+    # Verify Pillow is installed in virtualenv
     system libexec/"bin/python", "-c", "from PIL import Image; " \
            "print('✓ Pillow (PIL) installed correctly')"
 
