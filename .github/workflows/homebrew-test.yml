@@ -10,7 +10,7 @@ on:
 jobs:
   test-homebrew-install:
     runs-on: macos-latest  # ARM64 (Apple Silicon)
-    timeout-minutes: 15
+    timeout-minutes: 45  # Homebrew builds can take 30+ minutes with dependencies
 
     steps:
     - uses: actions/checkout@v4
