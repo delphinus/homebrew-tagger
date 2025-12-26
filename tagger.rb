@@ -151,9 +151,16 @@ class Tagger < Formula
     sha256 "be04d85bbc7b65651c5f8e6b9976ed9c6f41782a55524cef079a34a0bb82144d"
   end
 
-  # YouTube thumbnail dependencies (yt-dlp and Pillow)
-  # These are declared in install_requires in setup.py and will be installed automatically
-  # by venv.pip_install_and_link buildpath
+  # YouTube thumbnail dependencies
+  resource "yt-dlp" do
+    url "https://files.pythonhosted.org/packages/14/77/db924ebbd99d0b2b571c184cb08ed232cf4906c6f9b76eed763cd2c84170/yt_dlp-2025.12.8.tar.gz"
+    sha256 "b773c81bb6b71cb2c111cfb859f453c7a71cf2ef44eff234ff155877184c3e4f"
+  end
+
+  resource "pillow" do
+    url "https://files.pythonhosted.org/packages/5a/b0/cace85a1b0c9775a9f8f5d5423c8261c858760e2466c79b2dd184638b056/pillow-12.0.0.tar.gz"
+    sha256 "87d4f8125c9988bfbed67af47dd7a953e2fc7b0cc1e7800ec6d2080d490bb353"
+  end
 
   # DJ mix segmentation dependencies (pure Python packages)
   resource "audioread" do

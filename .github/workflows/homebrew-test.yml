@@ -74,6 +74,11 @@ jobs:
         # Check version
         brew info local/tagger/tagger
 
+    - name: Run formula tests
+      run: |
+        # Run the formula's test block to verify all dependencies
+        brew test -v local/tagger/tagger
+
     - name: Test tagger functionality
       run: |
         # Create a test directory
