@@ -71,7 +71,10 @@ class Tagger < Formula
       sha256 "446abdd8b94b55c800ac34b102dffd2f6aa0ce643c55dfc017ad89347db3dbdb"
     end
 
-    # Pillow is now in install_requires and will be installed automatically by pip
+    resource "pillow" do
+      url "https://files.pythonhosted.org/packages/fd/e0/ed960067543d080691d47d6938ebccbf3976a931c9567ab2fbfab983a5dd/pillow-12.0.0-cp312-cp312-macosx_11_0_arm64.whl"
+      sha256 "71db6b4c1653045dacc1585c1b0d184004f0d7e694c7b34ac165ca70c0838082"
+    end
   end
 
   on_intel do
@@ -126,7 +129,10 @@ class Tagger < Formula
       sha256 "70a0dff9d1f8da25179ffcf880e10cf1aad55fdb63cd59c9a49a1b82290062aa"
     end
 
-    # Pillow is now in install_requires and will be installed automatically by pip
+    resource "pillow" do
+      url "https://files.pythonhosted.org/packages/2c/90/4fcce2c22caf044e660a198d740e7fbc14395619e3cb1abad12192c0826c/pillow-12.0.0-cp312-cp312-macosx_10_13_x86_64.whl"
+      sha256 "53561a4ddc36facb432fae7a9d8afbfaf94795414f5cdc5fc52f28c1dca90371"
+    end
   end
 
   skip_clean "libexec"
@@ -151,9 +157,11 @@ class Tagger < Formula
     sha256 "be04d85bbc7b65651c5f8e6b9976ed9c6f41782a55524cef079a34a0bb82144d"
   end
 
-  # YouTube thumbnail dependencies (yt-dlp and Pillow)
-  # These are declared in install_requires in setup.py and will be installed automatically
-  # by venv.pip_install_and_link buildpath
+  # YouTube thumbnail dependencies
+  resource "yt-dlp" do
+    url "https://files.pythonhosted.org/packages/6e/2f/98c3596ad923f8efd32c90dca62e241e8ad9efcebf20831173c357042ba0/yt_dlp-2025.12.8-py3-none-any.whl"
+    sha256 "36e2584342e409cfbfa0b5e61448a1c5189e345cf4564294456ee509e7d3e065"
+  end
 
   # DJ mix segmentation dependencies (pure Python packages)
   resource "audioread" do

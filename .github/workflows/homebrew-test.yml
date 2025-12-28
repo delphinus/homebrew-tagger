@@ -10,7 +10,7 @@ on:
 jobs:
   test-homebrew-install:
     runs-on: macos-latest  # ARM64 (Apple Silicon)
-    timeout-minutes: 15
+    timeout-minutes: 45  # Homebrew builds can take 30+ minutes with dependencies
 
     steps:
     - uses: actions/checkout@v4
@@ -73,6 +73,11 @@ jobs:
 
         # Check version
         brew info local/tagger/tagger
+
+    - name: Run formula tests
+      run: |
+        # Run the formula's test block to verify all dependencies
+        brew test -v local/tagger/tagger
 
     - name: Test tagger functionality
       run: |
