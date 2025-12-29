@@ -174,11 +174,13 @@ class Tagger:
         execute: bool = False,
         no_color: bool = False,
         prefer_filename: bool = False,
+        thumbnail_crop: str = "auto",
     ):
         self.execute = execute
         self.dry_run = not execute
         self.no_color = no_color or not sys.stdout.isatty()
         self.prefer_filename = prefer_filename
+        self.thumbnail_crop = thumbnail_crop  # "auto", "square", "none"
 
     def color(self, text: str, *colors: str) -> str:
         """Apply color to text"""
@@ -191,6 +193,199 @@ class Tagger:
         """Print log message"""
         prefix = "[DRY-RUN] " if self.dry_run else ""
         print(f"{prefix}{message}")
+
+    def can_display_images(self) -> tuple[bool, str]:
+        """Check if terminal supports inline image display
+
+        Returns:
+            Tuple of (can_display, reason)
+        """
+        # Check if stdout is a tty
+        if not sys.stdout.isatty():
+            return False, "stdout is not a terminal (redirected or piped)"
+
+        # Check terminal type via environment variables
+        term_program = os.environ.get("TERM_PROGRAM", "")
+        term = os.environ.get("TERM", "")
+
+        # Known terminals that support iTerm2 inline images protocol
+        supported_terminals = {
+            "iTerm.app": "iTerm2",
+            "WezTerm": "WezTerm",
+            "mintty": "mintty (with imgcat)",
+            "Konsole": "Konsole (recent versions)",
+        }
+
+        if term_program in supported_terminals:
+            return True, ""
+
+        # WezTerm also sets TERM_PROGRAM_VERSION
+        if "wezterm" in term.lower() or os.environ.get("TERM_PROGRAM_VERSION", "").startswith("wezterm"):
+            return True, ""
+
+        # If we can't detect the terminal type, assume it doesn't support images
+        if term_program:
+            return False, f"terminal '{term_program}' may not support inline images"
+        else:
+            return False, f"terminal type '{term}' may not support inline images"
+
+    def display_image_iterm2(self, image_path: Path, max_width: int = 60):
+        """Display image using iTerm2 inline images protocol
+
+        Args:
+            image_path: Path to image file
+            max_width: Maximum display width in character cells (default: 60)
+        """
+        import base64
+
+        with open(image_path, "rb") as f:
+            image_data = f.read()
+
+        encoded = base64.b64encode(image_data).decode("ascii")
+
+        # iTerm2 inline images protocol
+        # ESC ] 1337 ; File=inline=1;width=N:<base64 data> BEL
+        # Width is specified in character cells, height is automatic (preserves aspect ratio)
+        print(f"\033]1337;File=inline=1;width={max_width}:{encoded}\007")
+
+    def create_crop_preview(self, image_path: Path) -> Path:
+        """Create preview image showing crop area
+
+        Args:
+            image_path: Path to original image
+
+        Returns:
+            Path to annotated image
+        """
+        from PIL import Image, ImageDraw
+
+        img = Image.open(image_path)
+        width, height = img.size
+
+        # Create annotated version showing crop area
+        annotated = img.copy()
+        draw = ImageDraw.Draw(annotated)
+
+        # Calculate crop coordinates
+        if width > height:
+            left = (width - height) // 2
+            crop_box = (left, 0, left + height, height)
+        else:
+            top = (height - width) // 2
+            crop_box = (0, top, width, top + width)
+
+        # Draw semi-transparent overlay on areas that will be cropped out
+        overlay = Image.new('RGBA', img.size, (0, 0, 0, 0))
+        overlay_draw = ImageDraw.Draw(overlay)
+
+        # Darken the areas outside crop box
+        if width > height:
+            # Left area
+            overlay_draw.rectangle((0, 0, left, height), fill=(0, 0, 0, 128))
+            # Right area
+            overlay_draw.rectangle((left + height, 0, width, height), fill=(0, 0, 0, 128))
+        else:
+            # Top area
+            overlay_draw.rectangle((0, 0, width, top), fill=(0, 0, 0, 128))
+            # Bottom area
+            overlay_draw.rectangle((0, top + width, width, height), fill=(0, 0, 0, 128))
+
+        # Composite the overlay
+        if annotated.mode != 'RGBA':
+            annotated = annotated.convert('RGBA')
+        annotated = Image.alpha_composite(annotated, overlay)
+        annotated = annotated.convert('RGB')
+
+        # Draw crop box border
+        draw = ImageDraw.Draw(annotated)
+        draw.rectangle(crop_box, outline=(255, 0, 0), width=3)
+
+        # Save temporary file
+        annotated_path = image_path.with_suffix('.annotated.jpg')
+        annotated.save(annotated_path, "JPEG", quality=95)
+
+        return annotated_path
+
+    def ask_thumbnail_crop(self, image_path: Path) -> bool:
+        """Ask user whether to crop thumbnail to square
+
+        Args:
+            image_path: Path to downloaded thumbnail
+
+        Returns:
+            True if user wants to crop, False otherwise
+        """
+        # Check if we can display images
+        can_display, reason = self.can_display_images()
+
+        if not can_display:
+            print("\n" + "=" * 60)
+            print(self.color("Warning: Cannot display thumbnail preview", "yellow"))
+            print("=" * 60)
+            print(f"Reason: {reason}")
+            print("\nSupported terminals: iTerm2, WezTerm, Konsole, mintty")
+            print(f"Your terminal: TERM_PROGRAM={os.environ.get('TERM_PROGRAM', '(not set)')}, TERM={os.environ.get('TERM', '(not set)')}")
+            print("\nApplying default: Keep original thumbnail (no cropping)")
+            print("=" * 60)
+            return False  # Default: no cropping
+
+        print("\n" + "=" * 60)
+        print("YouTube Thumbnail Preview:")
+        print("=" * 60)
+
+        try:
+            from PIL import Image
+
+            img = Image.open(image_path)
+            width, height = img.size
+
+            # Only show preview if image is not already square
+            if width != height:
+                # Create preview image with crop area
+                annotated_path = self.create_crop_preview(image_path)
+
+                print(f"\nOriginal image with crop area (red border):")
+                print(f"Dimensions: {width}x{height}")
+                crop_size = min(width, height)
+                print(f"Crop to: {crop_size}x{crop_size}")
+                try:
+                    self.display_image_iterm2(annotated_path)
+                except Exception as e:
+                    self.log(f"Warning: Could not display annotated image: {e}")
+
+                # Clean up temporary file
+                try:
+                    annotated_path.unlink()
+                except Exception:
+                    pass
+            else:
+                print(f"\nImage is already square ({width}x{height})")
+                try:
+                    self.display_image_iterm2(image_path)
+                except Exception as e:
+                    self.log(f"Warning: Could not display image: {e}")
+
+        except Exception as e:
+            self.log(f"Warning: Could not create preview: {e}")
+            # Fallback to showing original image
+            try:
+                self.display_image_iterm2(image_path)
+            except Exception:
+                pass
+
+        print("\nWould you like to crop this thumbnail to a square?")
+        print("  1. Keep original (rectangular)")
+        print("  2. Crop to square (center crop)")
+        print()
+
+        while True:
+            choice = input("Enter your choice (1 or 2) [1]: ").strip()
+            if choice == "" or choice == "1":
+                return False  # Keep original
+            elif choice == "2":
+                return True  # Crop to square
+            else:
+                print("Invalid choice. Please enter 1 or 2.")
 
     def get_artwork_hash(self, data: bytes) -> str:
         """Calculate SHA256 hash of artwork data"""
@@ -349,17 +544,17 @@ class Tagger:
         else:
             return directory / f"youtube_{video_id}.jpg"
 
-    def download_youtube_thumbnail(self, video_id: str, output_path: Path) -> bool:
-        """Download YouTube thumbnail and crop to square
+    def download_youtube_thumbnail(self, video_id: str, output_path: Path, crop: bool = False) -> bool:
+        """Download YouTube thumbnail and optionally crop to square
 
         Args:
             video_id: YouTube video ID (11 characters)
             output_path: Path where thumbnail should be saved
+            crop: Whether to crop the thumbnail to square (default: False)
 
         Returns:
             True if successful, False otherwise
         """
-        # Try yt-dlp first
         try:
             import yt_dlp
 
@@ -383,70 +578,43 @@ class Tagger:
 
             downloaded_path = downloaded_files[0]
 
-        except ImportError:
-            self.log("Note: yt-dlp not installed, using direct URL")
-            try:
-                import requests
-
-                # Try maxresdefault first, fallback to hqdefault
-                urls = [
-                    f"https://img.youtube.com/vi/{video_id}/maxresdefault.jpg",
-                    f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg",
-                ]
-
-                downloaded_path = None
-                for url in urls:
-                    response = requests.get(url, timeout=10)
-                    if response.status_code == 200:
-                        temp_file = output_path.with_suffix(".tmp.jpg")
-                        with open(temp_file, "wb") as f:
-                            f.write(response.content)
-                        downloaded_path = temp_file
-                        break
-
-                if not downloaded_path:
-                    return False
-
-            except ImportError:
-                self.log("Warning: Neither yt-dlp nor requests available")
-                return False
-            except Exception as e:
-                self.log(f"Warning: Failed to download thumbnail: {e}")
-                return False
         except Exception as e:
-            self.log(f"Warning: yt-dlp failed: {e}")
+            self.log(f"Warning: Failed to download thumbnail: {e}")
             return False
 
-        # Crop to square
+        # Process the thumbnail
         try:
             from PIL import Image
 
-            img = Image.open(downloaded_path)
-            width, height = img.size
+            if crop:
+                # Crop to square (center crop)
+                img = Image.open(downloaded_path)
+                width, height = img.size
 
-            # Crop to square (center crop)
-            if width > height:
-                left = (width - height) // 2
-                img_cropped = img.crop((left, 0, left + height, height))
+                if width > height:
+                    left = (width - height) // 2
+                    img_cropped = img.crop((left, 0, left + height, height))
+                else:
+                    top = (height - width) // 2
+                    img_cropped = img.crop((0, top, width, top + width))
+
+                # Save as JPEG
+                img_cropped.save(output_path, "JPEG", quality=95)
+
+                # Clean up temporary file
+                if downloaded_path != output_path:
+                    downloaded_path.unlink()
             else:
-                top = (height - width) // 2
-                img_cropped = img.crop((0, top, width, top + width))
+                # Keep original, just move/rename
+                if downloaded_path != output_path:
+                    # Re-save as JPEG to ensure consistent format
+                    img = Image.open(downloaded_path)
+                    img.save(output_path, "JPEG", quality=95)
+                    downloaded_path.unlink()
 
-            # Save as JPEG
-            img_cropped.save(output_path, "JPEG", quality=95)
-
-            # Clean up temporary file
-            if downloaded_path != output_path:
-                downloaded_path.unlink()
-
-        except ImportError:
-            self.log("Note: Pillow not installed, skipping square crop")
-            # Just rename/move the file
-            if downloaded_path != output_path:
-                shutil.move(str(downloaded_path), str(output_path))
         except Exception as e:
-            self.log(f"Warning: Failed to crop thumbnail: {e}")
-            # Keep original if crop fails
+            self.log(f"Warning: Failed to process thumbnail: {e}")
+            # Keep original if processing fails
             if downloaded_path != output_path:
                 shutil.move(str(downloaded_path), str(output_path))
 
@@ -1329,14 +1497,52 @@ class Tagger:
         # Download thumbnails (execute mode only)
         if not self.dry_run and artwork_downloads:
             self.log(f"Downloading {len(artwork_downloads)} YouTube thumbnail(s)...")
+
+            # Determine crop setting
+            crop_choice = None
+            if self.thumbnail_crop == "square":
+                crop_choice = True
+            elif self.thumbnail_crop == "none":
+                crop_choice = False
+            # else: auto mode, will ask for each thumbnail
+
             for idx, (video_id, path) in enumerate(artwork_downloads.items(), 1):
                 print(
                     f"  [{idx}/{len(artwork_downloads)}] {video_id}...",
                     end="",
                     flush=True,
                 )
-                if self.download_youtube_thumbnail(video_id, path):
-                    print(" ✓")
+
+                # Download thumbnail first
+                if self.download_youtube_thumbnail(video_id, path, crop=False):
+                    print(" ✓ Downloaded")
+
+                    # Determine whether to crop this thumbnail
+                    should_crop = crop_choice
+                    if should_crop is None:  # auto mode
+                        should_crop = self.ask_thumbnail_crop(path)
+
+                    # Apply crop if needed
+                    if should_crop:
+                        try:
+                            from PIL import Image
+
+                            img = Image.open(path)
+                            width, height = img.size
+
+                            # Only crop if not already square
+                            if width != height:
+                                if width > height:
+                                    left = (width - height) // 2
+                                    img_cropped = img.crop((left, 0, left + height, height))
+                                else:
+                                    top = (height - width) // 2
+                                    img_cropped = img.crop((0, top, width, top + width))
+
+                                img_cropped.save(path, "JPEG", quality=95)
+                                print(f"    → Cropped to square")
+                        except Exception as e:
+                            self.log(f"    Warning: Failed to crop: {e}")
                 else:
                     print(" ✗ Failed")
 
@@ -1599,6 +1805,13 @@ Note:
     )
 
     parser.add_argument(
+        "--thumbnail-crop",
+        choices=["auto", "square", "none"],
+        default="auto",
+        help="YouTube thumbnail cropping: 'auto' (ask for each), 'square' (crop to square), 'none' (keep original) (default: auto)",
+    )
+
+    parser.add_argument(
         "--segment",
         metavar="AUDIO_FILE",
         help="Segment a DJ mix and generate CUE sheet (use with --sensitivity to adjust detection)",
@@ -1765,6 +1978,7 @@ Note:
         execute=args.execute,
         no_color=args.no_color,
         prefer_filename=args.prefer_filename,
+        thumbnail_crop=args.thumbnail_crop,
     )
 
     if args.yaml_file:
