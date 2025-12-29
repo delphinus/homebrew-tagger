@@ -220,7 +220,9 @@ class Tagger:
             return True, ""
 
         # WezTerm also sets TERM_PROGRAM_VERSION
-        if "wezterm" in term.lower() or os.environ.get("TERM_PROGRAM_VERSION", "").startswith("wezterm"):
+        if "wezterm" in term.lower() or os.environ.get(
+            "TERM_PROGRAM_VERSION", ""
+        ).startswith("wezterm"):
             return True, ""
 
         # If we can't detect the terminal type, assume it doesn't support images
@@ -275,7 +277,7 @@ class Tagger:
             crop_box = (0, top, width, top + width)
 
         # Draw semi-transparent overlay on areas that will be cropped out
-        overlay = Image.new('RGBA', img.size, (0, 0, 0, 0))
+        overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
         overlay_draw = ImageDraw.Draw(overlay)
 
         # Darken the areas outside crop box
@@ -283,7 +285,9 @@ class Tagger:
             # Left area
             overlay_draw.rectangle((0, 0, left, height), fill=(0, 0, 0, 128))
             # Right area
-            overlay_draw.rectangle((left + height, 0, width, height), fill=(0, 0, 0, 128))
+            overlay_draw.rectangle(
+                (left + height, 0, width, height), fill=(0, 0, 0, 128)
+            )
         else:
             # Top area
             overlay_draw.rectangle((0, 0, width, top), fill=(0, 0, 0, 128))
@@ -291,17 +295,17 @@ class Tagger:
             overlay_draw.rectangle((0, top + width, width, height), fill=(0, 0, 0, 128))
 
         # Composite the overlay
-        if annotated.mode != 'RGBA':
-            annotated = annotated.convert('RGBA')
+        if annotated.mode != "RGBA":
+            annotated = annotated.convert("RGBA")
         annotated = Image.alpha_composite(annotated, overlay)
-        annotated = annotated.convert('RGB')
+        annotated = annotated.convert("RGB")
 
         # Draw crop box border
         draw = ImageDraw.Draw(annotated)
         draw.rectangle(crop_box, outline=(255, 0, 0), width=3)
 
         # Save temporary file
-        annotated_path = image_path.with_suffix('.annotated.jpg')
+        annotated_path = image_path.with_suffix(".annotated.jpg")
         annotated.save(annotated_path, "JPEG", quality=95)
 
         return annotated_path
@@ -324,7 +328,9 @@ class Tagger:
             print("=" * 60)
             print(f"Reason: {reason}")
             print("\nSupported terminals: iTerm2, WezTerm, Konsole, mintty")
-            print(f"Your terminal: TERM_PROGRAM={os.environ.get('TERM_PROGRAM', '(not set)')}, TERM={os.environ.get('TERM', '(not set)')}")
+            print(
+                f"Your terminal: TERM_PROGRAM={os.environ.get('TERM_PROGRAM', '(not set)')}, TERM={os.environ.get('TERM', '(not set)')}"
+            )
             print("\nApplying default: Keep original thumbnail (no cropping)")
             print("=" * 60)
             return False  # Default: no cropping
@@ -544,7 +550,9 @@ class Tagger:
         else:
             return directory / f"youtube_{video_id}.jpg"
 
-    def download_youtube_thumbnail(self, video_id: str, output_path: Path, crop: bool = False) -> bool:
+    def download_youtube_thumbnail(
+        self, video_id: str, output_path: Path, crop: bool = False
+    ) -> bool:
         """Download YouTube thumbnail and optionally crop to square
 
         Args:
@@ -1534,7 +1542,9 @@ class Tagger:
                             if width != height:
                                 if width > height:
                                     left = (width - height) // 2
-                                    img_cropped = img.crop((left, 0, left + height, height))
+                                    img_cropped = img.crop(
+                                        (left, 0, left + height, height)
+                                    )
                                 else:
                                     top = (height - width) // 2
                                     img_cropped = img.crop((0, top, width, top + width))
