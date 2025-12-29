@@ -1254,7 +1254,7 @@ class TestYouTubeThumbnailIntegration:
             mock_ytdlp.return_value.__enter__.return_value = mock_ydl
 
             output_path = Path(self.test_dir) / "output.jpg"
-            result = tagger.download_youtube_thumbnail("TEtLwnrhn5U", output_path)
+            result = tagger.download_youtube_thumbnail("TEtLwnrhn5U", output_path, crop=True)
 
         assert result is True
         assert output_path.exists()
