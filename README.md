@@ -127,6 +127,66 @@ tagger --execute
 - **Graceful degradation**: Works without yt-dlp (uses direct URL with lower quality)
 - **No override**: Won't replace existing artwork
 
+### Bandcamp Artwork Auto-Fetching
+
+Tagger automatically downloads and embeds Bandcamp album/track artwork when generating YAML files.
+
+#### How it works
+
+When generating YAML from audio files with Bandcamp URLs in the comment field:
+
+1. Tagger detects the Bandcamp URL in the comment tag
+2. Automatically downloads the album/track artwork using yt-dlp
+3. Optionally crops the artwork to square aspect ratio (center crop)
+4. Saves it as `cover.jpg` (single file) or `bandcamp_{label}_{album}.jpg` (multiple albums)
+5. Sets the artwork field in the YAML to reference the artwork
+
+**Example:**
+
+```bash
+# 1. Download from Bandcamp using yt-dlp
+yt-dlp https://brutalkuts.bandcamp.com/album/the-ultimate-happy-2-the-core
+
+# 2. Generate YAML
+tagger --execute
+
+# 3. Edit tagger.yaml and add Bandcamp URL to defaults.comment:
+# defaults:
+#   comment: https://brutalkuts.bandcamp.com/album/the-ultimate-happy-2-the-core
+
+# 4. Apply YAML - artwork downloads automatically
+tagger --execute tagger.yaml
+
+# Results:
+# - Creates cover.jpg (artwork from Bandcamp album)
+# - All files get the artwork embedded
+```
+
+**Features:**
+- **Automatic detection**: Scans comment field for Bandcamp URLs
+- **Smart naming**: Same album shares artwork, different albums get unique files
+- **Same cropping options**: Uses `--thumbnail-crop` flag (auto/square/none)
+- **Deduplication**: Same URL across multiple files downloads only once
+- **No override**: Won't replace existing artwork
+
+**Supported Bandcamp URL formats:**
+- `https://LABEL.bandcamp.com/album/ALBUM-SLUG`
+- `https://LABEL.bandcamp.com/track/TRACK-SLUG`
+
+**Setting Bandcamp URLs:**
+
+You can set Bandcamp URLs in the comment field in the YAML file:
+
+```yaml
+defaults:
+  comment: https://label.bandcamp.com/album/album-name
+
+# Or per-file:
+files:
+- filename: "Label - Artist - Title [ID].mp3"
+  comment: https://label.bandcamp.com/track/track-name
+```
+
 ## Usage
 
 ### AAC to M4A Conversion
