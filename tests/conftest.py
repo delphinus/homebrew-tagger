@@ -11,6 +11,10 @@ from pathlib import Path
 os.environ["NUMBA_DISABLE_JIT"] = "0"  # Keep JIT enabled
 os.environ["NUMBA_COVERAGE"] = "0"  # Disable coverage integration
 
+# Preserve current directory to avoid issues with librosa lazy loading + coverage
+# On Python 3.12, coverage module initialization can fail if cwd is deleted
+_original_cwd = os.getcwd()
+
 # Get the project root directory
 project_root = Path(__file__).parent.parent
 
@@ -27,3 +31,18 @@ spec.loader.exec_module(tagger_module)
 
 # Make tagger module available to all tests
 pytest_plugins = []
+
+
+def pytest_runtest_setup(item):
+    """
+    Ensure current directory exists before each test.
+
+    This fixes Python 3.12 + pytest-cov + librosa lazy loading issues where
+    coverage module initialization fails if the current directory was deleted.
+    """
+    # Only change directory if current one doesn't exist
+    try:
+        os.getcwd()
+    except (FileNotFoundError, OSError):
+        # Current directory was deleted, restore to original
+        os.chdir(_original_cwd)
