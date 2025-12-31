@@ -528,6 +528,28 @@ class Tagger:
         )
         return match.group(1) if match else None
 
+    def extract_bandcamp_url_info(self, url: str) -> dict | None:
+        """Extract Bandcamp URL information
+
+        Supported URL patterns:
+        - https://LABEL.bandcamp.com/album/ALBUM-SLUG
+        - https://LABEL.bandcamp.com/track/TRACK-SLUG
+
+        Returns:
+            dict with 'label_slug', 'type' ('album' or 'track'), 'slug' if valid URL
+            None if not a valid Bandcamp URL
+        """
+        match = re.match(
+            r"https?://([^.]+)\.bandcamp\.com/(album|track)/([^/?]+)", url
+        )
+        if match:
+            return {
+                "label_slug": match.group(1),
+                "type": match.group(2),  # 'album' or 'track'
+                "slug": match.group(3),
+            }
+        return None
+
     def get_thumbnail_path_for_file(self, filepath: Path, video_id: str) -> Path:
         """Determine thumbnail filename for a file
 
@@ -549,6 +571,33 @@ class Tagger:
             return directory / "cover.jpg"
         else:
             return directory / f"youtube_{video_id}.jpg"
+
+    def get_bandcamp_artwork_path_for_file(
+        self, filepath: Path, url_info: dict
+    ) -> Path:
+        """Determine artwork filename for Bandcamp
+
+        Naming strategy:
+        - Single file: cover.jpg
+        - Multiple files from same album: cover.jpg (shared)
+        - Multiple files from different albums: bandcamp_{label}_{slug}.jpg
+
+        Args:
+            filepath: Path to audio file
+            url_info: Dict from extract_bandcamp_url_info()
+
+        Returns:
+            Path to artwork file
+        """
+        directory = filepath.parent
+        audio_files = self.find_audio_files(str(directory))
+
+        if len(audio_files) == 1:
+            return directory / "cover.jpg"
+        else:
+            # Create unique identifier from URL
+            identifier = f"{url_info['label_slug']}_{url_info['slug']}"
+            return directory / f"bandcamp_{identifier}.jpg"
 
     def download_youtube_thumbnail(
         self, video_id: str, output_path: Path, crop: bool = False
@@ -622,6 +671,80 @@ class Tagger:
 
         except Exception as e:
             self.log(f"Warning: Failed to process thumbnail: {e}")
+            # Keep original if processing fails
+            if downloaded_path != output_path:
+                shutil.move(str(downloaded_path), str(output_path))
+
+        return True
+
+    def download_bandcamp_artwork(
+        self, url: str, output_path: Path, crop: bool = False
+    ) -> bool:
+        """Download Bandcamp artwork and optionally crop to square
+
+        Args:
+            url: Bandcamp album or track URL
+            output_path: Path where artwork should be saved
+            crop: Whether to crop to square (default: False)
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            import yt_dlp
+
+            temp_path = output_path.with_suffix("")
+            ydl_opts = {
+                "skip_download": True,
+                "writethumbnail": True,
+                "outtmpl": str(temp_path),
+                "quiet": True,
+                "no_warnings": True,
+            }
+
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([url])
+
+            # Find downloaded artwork (yt-dlp adds extension)
+            downloaded_files = list(temp_path.parent.glob(f"{temp_path.name}.*"))
+            if not downloaded_files:
+                raise Exception("Artwork not downloaded")
+
+            downloaded_path = downloaded_files[0]
+
+        except Exception as e:
+            self.log(f"Warning: Failed to download Bandcamp artwork: {e}")
+            return False
+
+        # Process artwork (same logic as YouTube)
+        try:
+            from PIL import Image
+
+            if crop:
+                # Bandcamp artwork is usually already square, but crop if needed
+                img = Image.open(downloaded_path)
+                width, height = img.size
+
+                if width > height:
+                    left = (width - height) // 2
+                    img_cropped = img.crop((left, 0, left + height, height))
+                else:
+                    top = (height - width) // 2
+                    img_cropped = img.crop((0, top, width, top + width))
+
+                img_cropped.save(output_path, "JPEG", quality=95)
+
+                if downloaded_path != output_path:
+                    downloaded_path.unlink()
+            else:
+                # Keep original, convert to JPEG
+                if downloaded_path != output_path:
+                    img = Image.open(downloaded_path)
+                    img.save(output_path, "JPEG", quality=95)
+                    downloaded_path.unlink()
+
+        except Exception as e:
+            self.log(f"Warning: Failed to process Bandcamp artwork: {e}")
             # Keep original if processing fails
             if downloaded_path != output_path:
                 shutil.move(str(downloaded_path), str(output_path))
@@ -1477,6 +1600,7 @@ class Tagger:
         # Read tags from all files
         entries = []
         artwork_downloads = {}  # Track thumbnails to download (video_id: path)
+        bandcamp_artwork_downloads = {}  # Track Bandcamp artwork to download (url: path)
 
         for filepath in files:
             tags = self.read_tags(filepath)
@@ -1497,6 +1621,23 @@ class Tagger:
                     # Set artwork if not already present
                     if not tags.get("artwork"):
                         tags["artwork"] = str(thumbnail_path.name)  # Relative path
+
+            # Check for Bandcamp URL in comment field
+            if comment and "bandcamp.com" in comment:
+                url_info = self.extract_bandcamp_url_info(comment)
+                if url_info:
+                    artwork_path = self.get_bandcamp_artwork_path_for_file(
+                        filepath, url_info
+                    )
+
+                    # Skip if artwork already exists
+                    if not artwork_path.exists():
+                        # Use full URL as key for deduplication
+                        bandcamp_artwork_downloads[comment] = artwork_path
+
+                    # Set artwork if not already present
+                    if not tags.get("artwork"):
+                        tags["artwork"] = str(artwork_path.name)  # Relative path
 
             # Remove None values
             entry = {k: v for k, v in tags.items() if v is not None}
@@ -1531,6 +1672,60 @@ class Tagger:
                         should_crop = self.ask_thumbnail_crop(path)
 
                     # Apply crop if needed
+                    if should_crop:
+                        try:
+                            from PIL import Image
+
+                            img = Image.open(path)
+                            width, height = img.size
+
+                            # Only crop if not already square
+                            if width != height:
+                                if width > height:
+                                    left = (width - height) // 2
+                                    img_cropped = img.crop(
+                                        (left, 0, left + height, height)
+                                    )
+                                else:
+                                    top = (height - width) // 2
+                                    img_cropped = img.crop((0, top, width, top + width))
+
+                                img_cropped.save(path, "JPEG", quality=95)
+                                print(f"    → Cropped to square")
+                        except Exception as e:
+                            self.log(f"    Warning: Failed to crop: {e}")
+                else:
+                    print(" ✗ Failed")
+
+        # Download Bandcamp artwork (execute mode only)
+        if not self.dry_run and bandcamp_artwork_downloads:
+            self.log(f"Downloading {len(bandcamp_artwork_downloads)} Bandcamp artwork(s)...")
+
+            # Determine crop setting (reuse same logic as YouTube)
+            crop_choice = None
+            if self.thumbnail_crop == "square":
+                crop_choice = True
+            elif self.thumbnail_crop == "none":
+                crop_choice = False
+            # else: auto mode, will ask for each artwork
+
+            for idx, (url, path) in enumerate(bandcamp_artwork_downloads.items(), 1):
+                print(
+                    f"  [{idx}/{len(bandcamp_artwork_downloads)}] {url}...",
+                    end="",
+                    flush=True,
+                )
+
+                # Download artwork first
+                if self.download_bandcamp_artwork(url, path, crop=False):
+                    print(" ✓ Downloaded")
+
+                    # Determine whether to crop
+                    should_crop = crop_choice
+                    if should_crop is None:  # auto mode
+                        should_crop = self.ask_thumbnail_crop(path)  # Reuse existing function
+
+                    # Apply crop if needed (same logic as YouTube)
                     if should_crop:
                         try:
                             from PIL import Image

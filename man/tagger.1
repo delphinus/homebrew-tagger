@@ -273,6 +273,108 @@ Original .aac file is removed after successful conversion
 .IP \(bu 3
 Conversion happens before tag operations
 .RE
+.SS "Artwork Auto-Fetching"
+.PP
+Tagger automatically downloads and embeds artwork from YouTube and Bandcamp when generating YAML files.
+.PP
+.B YouTube Thumbnails:
+.PP
+When files have YouTube URLs in the comment field (e.g., files named
+.I "Artist - Song [VIDEO_ID].mp3"
+), tagger:
+.RS
+.IP 1. 4
+Extracts the YouTube video ID from the filename
+.IP 2. 4
+Stores the full YouTube URL in the comment tag
+.IP 3. 4
+Downloads the video thumbnail using yt-dlp
+.IP 4. 4
+Optionally crops to square aspect ratio (based on
+.B --thumbnail-crop
+)
+.IP 5. 4
+Saves as
+.B cover.jpg
+(single file) or
+.B youtube_VIDEO_ID.jpg
+(multiple files)
+.IP 6. 4
+Sets the artwork field in YAML to reference the thumbnail
+.RE
+.PP
+.B Bandcamp Artwork:
+.PP
+When files have Bandcamp URLs in the comment field, tagger:
+.RS
+.IP 1. 4
+Detects the Bandcamp URL in the comment tag
+.IP 2. 4
+Downloads the album/track artwork using yt-dlp
+.IP 3. 4
+Optionally crops to square aspect ratio (based on
+.B --thumbnail-crop
+)
+.IP 4. 4
+Saves as
+.B cover.jpg
+(single file) or
+.B bandcamp_{label}_{album}.jpg
+(multiple albums)
+.IP 5. 4
+Sets the artwork field in YAML to reference the artwork
+.RE
+.PP
+Supported Bandcamp URL formats:
+.RS
+.IP \(bu 2
+https://LABEL.bandcamp.com/album/ALBUM-SLUG
+.IP \(bu 2
+https://LABEL.bandcamp.com/track/TRACK-SLUG
+.RE
+.PP
+.B Setting URLs in YAML:
+.PP
+You can set YouTube or Bandcamp URLs in the comment field:
+.RS
+.nf
+defaults:
+  comment: https://label.bandcamp.com/album/album-name
+
+files:
+  - filename: "Track.mp3"
+    comment: https://www.youtube.com/watch?v=VIDEO_ID
+.fi
+.RE
+.PP
+.B Thumbnail Cropping Options:
+.PP
+Use the
+.B --thumbnail-crop
+option to control artwork cropping:
+.RS
+.IP \(bu 2
+.B auto
+(default) - Ask for each thumbnail whether to crop to square
+.IP \(bu 2
+.B square
+- Always crop to square (center crop)
+.IP \(bu 2
+.B none
+- Keep original aspect ratio
+.RE
+.PP
+.B Features:
+.RS
+.IP \(bu 3
+Smart deduplication (same URL downloads only once)
+.IP \(bu 3
+Graceful degradation (works without yt-dlp for YouTube)
+.IP \(bu 3
+Won't override existing artwork
+.IP \(bu 3
+Same artwork shared across files from same album
+.RE
 .SH DJ MIX SEGMENTATION MODE
 .SS "Audio Analysis Pipeline"
 .PP
