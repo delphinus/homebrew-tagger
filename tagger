@@ -539,9 +539,7 @@ class Tagger:
             dict with 'label_slug', 'type' ('album' or 'track'), 'slug' if valid URL
             None if not a valid Bandcamp URL
         """
-        match = re.match(
-            r"https?://([^.]+)\.bandcamp\.com/(album|track)/([^/?]+)", url
-        )
+        match = re.match(r"https?://([^.]+)\.bandcamp\.com/(album|track)/([^/?]+)", url)
         if match:
             return {
                 "label_slug": match.group(1),
@@ -1600,7 +1598,9 @@ class Tagger:
         # Read tags from all files
         entries = []
         artwork_downloads = {}  # Track thumbnails to download (video_id: path)
-        bandcamp_artwork_downloads = {}  # Track Bandcamp artwork to download (url: path)
+        bandcamp_artwork_downloads = (
+            {}
+        )  # Track Bandcamp artwork to download (url: path)
 
         for filepath in files:
             tags = self.read_tags(filepath)
@@ -1699,7 +1699,9 @@ class Tagger:
 
         # Download Bandcamp artwork (execute mode only)
         if not self.dry_run and bandcamp_artwork_downloads:
-            self.log(f"Downloading {len(bandcamp_artwork_downloads)} Bandcamp artwork(s)...")
+            self.log(
+                f"Downloading {len(bandcamp_artwork_downloads)} Bandcamp artwork(s)..."
+            )
 
             # Determine crop setting (reuse same logic as YouTube)
             crop_choice = None
@@ -1723,7 +1725,9 @@ class Tagger:
                     # Determine whether to crop
                     should_crop = crop_choice
                     if should_crop is None:  # auto mode
-                        should_crop = self.ask_thumbnail_crop(path)  # Reuse existing function
+                        should_crop = self.ask_thumbnail_crop(
+                            path
+                        )  # Reuse existing function
 
                     # Apply crop if needed (same logic as YouTube)
                     if should_crop:
