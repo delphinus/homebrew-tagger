@@ -1830,6 +1830,33 @@ class Tagger:
         )
 
         if self.dry_run:
+            # Show artwork download summary if any
+            total_downloads = len(artwork_downloads) + len(bandcamp_artwork_downloads)
+            if total_downloads > 0:
+                self.log("")
+                self.log("Artwork Download Summary:")
+                self.log("-" * 60)
+
+                if artwork_downloads:
+                    self.log(f"YouTube Thumbnails: {len(artwork_downloads)} file(s)")
+                    for idx, (video_id, path) in enumerate(artwork_downloads.items(), 1):
+                        self.log(f"  [{idx}] {video_id} -> {path.name}")
+
+                if bandcamp_artwork_downloads:
+                    self.log(f"Bandcamp Artwork: {len(bandcamp_artwork_downloads)} file(s)")
+                    for idx, (url, path) in enumerate(bandcamp_artwork_downloads.items(), 1):
+                        # Extract readable display name from URL
+                        url_info = self.extract_bandcamp_url_info(url)
+                        if url_info:
+                            display_name = f"{url_info['label_slug']}/{url_info['type']}/{url_info['slug']}"
+                        else:
+                            display_name = url[:50] + "..." if len(url) > 50 else url
+                        self.log(f"  [{idx}] {display_name} -> {path.name}")
+
+                self.log("-" * 60)
+                self.log(f"Total: {total_downloads} artwork file(s) would be downloaded with -e flag")
+                self.log("")
+
             self.log(f"Would create {output_file} with content:")
             print("\n" + "=" * 60)
             print(schema_comment + yaml_str)
