@@ -1919,6 +1919,9 @@ class Tagger:
         ]
         self.log(f"Processing {len(files_data)} file(s) from {yaml_file}")
 
+        # Track Bandcamp artwork to download (url: path)
+        bandcamp_artwork_downloads = {}
+
         # Calculate maximum track number for padding
         max_track = 0
         for file_data in files_data:
@@ -1942,6 +1945,24 @@ class Tagger:
             # Merge defaults with file-specific data (file-specific takes priority)
             merged_data = defaults | file_data
 
+            # Check for Bandcamp URL in comment field
+            comment = merged_data.get("comment")
+            if comment and "bandcamp.com" in comment:
+                url_info = self.extract_bandcamp_url_info(comment)
+                if url_info:
+                    artwork_path = self.get_bandcamp_artwork_path_for_file(
+                        filepath, url_info
+                    )
+
+                    # Skip if artwork already exists
+                    if not artwork_path.exists():
+                        # Use full URL as key for deduplication
+                        bandcamp_artwork_downloads[comment] = artwork_path
+
+                    # Set artwork if not already present
+                    if not merged_data.get("artwork"):
+                        merged_data["artwork"] = str(artwork_path.name)  # Relative path
+
             # Write tags
             self.write_tags(filepath, merged_data)
 
@@ -1956,6 +1977,105 @@ class Tagger:
             # Update YAML entry with new filename for future reference
             if new_path and not self.dry_run:
                 file_data["filename"] = new_path.name
+
+        # Download Bandcamp artwork (execute mode only)
+        if not self.dry_run and bandcamp_artwork_downloads:
+            self.log(
+                f"Downloading {len(bandcamp_artwork_downloads)} Bandcamp artwork(s)..."
+            )
+
+            # Determine crop setting (reuse same logic as YouTube)
+            crop_choice = None
+            if self.thumbnail_crop == "square":
+                crop_choice = True
+            elif self.thumbnail_crop == "none":
+                crop_choice = False
+            # else: auto mode, will ask for each artwork
+
+            for idx, (url, path) in enumerate(bandcamp_artwork_downloads.items(), 1):
+                print(
+                    f"  [{idx}/{len(bandcamp_artwork_downloads)}] {url}...",
+                    end="",
+                    flush=True,
+                )
+
+                # Download artwork first
+                if self.download_bandcamp_artwork(url, path, crop=False):
+                    print(" ✓ Downloaded")
+
+                    # Determine whether to crop
+                    should_crop = crop_choice
+                    if should_crop is None:
+                        # Auto mode: ask user
+                        while True:
+                            print(
+                                "    Crop to square? (y/n/a=always/n=never): ",
+                                end="",
+                                flush=True,
+                            )
+                            choice = input().strip().lower()
+                            if choice in ["y", "yes"]:
+                                should_crop = True
+                                break
+                            elif choice in ["n", "no"]:
+                                should_crop = False
+                                break
+                            elif choice == "a":
+                                should_crop = True
+                                crop_choice = True  # Remember for next files
+                                break
+                            elif choice == "v":
+                                should_crop = False
+                                crop_choice = False  # Remember for next files
+                                break
+                            else:
+                                print("    Invalid choice. Please enter y/n/a/v.")
+
+                    # Crop if requested
+                    if should_crop:
+                        try:
+                            from PIL import Image
+
+                            img = Image.open(path)
+                            width, height = img.size
+
+                            if width != height:
+                                # Crop to center square
+                                if width > height:
+                                    left = (width - height) // 2
+                                    img_cropped = img.crop(
+                                        (left, 0, left + height, height)
+                                    )
+                                else:
+                                    top = (height - width) // 2
+                                    img_cropped = img.crop((0, top, width, top + width))
+
+                                img_cropped.save(path, "JPEG", quality=95)
+                                print(f"    → Cropped to square")
+                        except Exception as e:
+                            self.log(f"    Warning: Failed to crop: {e}")
+                else:
+                    print(" ✗ Failed")
+
+        # Show artwork download summary in dry-run mode
+        if self.dry_run and bandcamp_artwork_downloads:
+            self.log("")
+            self.log("Artwork Download Summary:")
+            self.log("-" * 60)
+            self.log(f"Bandcamp Artwork: {len(bandcamp_artwork_downloads)} file(s)")
+            for idx, (url, path) in enumerate(bandcamp_artwork_downloads.items(), 1):
+                # Extract readable display name from URL
+                url_info = self.extract_bandcamp_url_info(url)
+                if url_info:
+                    display_name = f"{url_info['label_slug']}/{url_info['type']}/{url_info['slug']}"
+                else:
+                    display_name = url[:50] + "..." if len(url) > 50 else url
+                self.log(f"  [{idx}] {display_name} -> {path.name}")
+            self.log("-" * 60)
+            self.log(
+                f"Total: {len(bandcamp_artwork_downloads)} artwork file(s) would be downloaded with -e flag"
+            )
+            self.log("")
 
         # Update YAML file with new filenames
         if not self.dry_run:
