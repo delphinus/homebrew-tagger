@@ -1839,12 +1839,18 @@ class Tagger:
 
                 if artwork_downloads:
                     self.log(f"YouTube Thumbnails: {len(artwork_downloads)} file(s)")
-                    for idx, (video_id, path) in enumerate(artwork_downloads.items(), 1):
+                    for idx, (video_id, path) in enumerate(
+                        artwork_downloads.items(), 1
+                    ):
                         self.log(f"  [{idx}] {video_id} -> {path.name}")
 
                 if bandcamp_artwork_downloads:
-                    self.log(f"Bandcamp Artwork: {len(bandcamp_artwork_downloads)} file(s)")
-                    for idx, (url, path) in enumerate(bandcamp_artwork_downloads.items(), 1):
+                    self.log(
+                        f"Bandcamp Artwork: {len(bandcamp_artwork_downloads)} file(s)"
+                    )
+                    for idx, (url, path) in enumerate(
+                        bandcamp_artwork_downloads.items(), 1
+                    ):
                         # Extract readable display name from URL
                         url_info = self.extract_bandcamp_url_info(url)
                         if url_info:
@@ -1854,7 +1860,9 @@ class Tagger:
                         self.log(f"  [{idx}] {display_name} -> {path.name}")
 
                 self.log("-" * 60)
-                self.log(f"Total: {total_downloads} artwork file(s) would be downloaded with -e flag")
+                self.log(
+                    f"Total: {total_downloads} artwork file(s) would be downloaded with -e flag"
+                )
                 self.log("")
 
             self.log(f"Would create {output_file} with content:")
