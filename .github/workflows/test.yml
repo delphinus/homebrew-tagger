@@ -92,7 +92,13 @@ jobs:
 
     - name: Install tagger via Homebrew
       run: |
-        brew install --build-from-source delphinus/tagger/tagger
+        # Ensure clean state by uninstalling if already exists
+        brew uninstall tagger 2>/dev/null || true
+
+        # Install tagger using normal user flow (no --build-from-source)
+        # Since this is a local tap without pre-built bottles, Homebrew will
+        # build from source automatically, which matches real user experience
+        brew install delphinus/tagger/tagger
 
     - name: Verify tagger installation
       run: |
