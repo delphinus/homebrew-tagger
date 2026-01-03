@@ -124,8 +124,9 @@ class Tagger < Formula
     # Install the main package
     venv.pip_install_and_link buildpath
 
-    # Install man page
+    # Install man pages
     man1.install "man/tagger.1"
+    (man1/"ja").install "man/ja/tagger.1"
 
     # Install shell completions
     bash_completion.install "completions/tagger.bash" => "tagger"
@@ -148,6 +149,7 @@ class Tagger < Formula
            "print('✓ Pillow (PIL) installed correctly')"
 
     # Test man page installation
-    assert_predicate man1/"tagger.1", :exist?, "Man page should be installed"
+    assert_predicate man1/"tagger.1", :exist?, "English man page should be installed"
+    assert_predicate man1/"ja/tagger.1", :exist?, "Japanese man page should be installed"
   end
 end

@@ -1,0 +1,524 @@
+.TH TAGGER 1 "2026年1月" "tagger 1.21.1" "ユーザーコマンド"
+.SH 名前
+tagger \- オーディオファイルのタグとファイル名管理ツール
+.SH 書式
+.B tagger
+[\fB\-e\fR|\fB\-\-execute\fR] [\fB\-o\fR \fIOUTPUT\fR] [\fB\-\-no\-color\fR] [\fB\-\-prefer\-filename\fR] [\fIYAML_FILE\fR]
+.br
+.B tagger
+{\fB\-v\fR|\fB\-\-version\fR}
+.br
+.B tagger
+{\fB\-h\fR|\fB\-\-help\fR}
+.SH 説明
+.B tagger
+は MP3 および M4A ファイルに対応したオーディオファイルのタグとファイル名を管理するツールです。
+.PP
+.B タグ管理モード
+- オーディオファイルから YAML 設定を生成し、YAML からタグを適用し、メタデータとファイル名を同期します。
+.SH オプション
+.SS "一般オプション"
+.TP
+.BR \-e ", " \-\-execute
+変更を実行します（デフォルトはドライランモード）。このフラグを指定しない場合、tagger は変更内容のプレビューのみを表示します。
+.TP
+.BR \-o ", " \-\-output " " \fIOUTPUT\fR
+生成時の YAML ファイル名（デフォルト: tagger.yaml）。
+.TP
+.BR \-\-no\-color
+色付き出力を無効にします。スクリプトや非TTY環境で有用です。
+.TP
+.BR \-\-prefer\-filename
+YAML 生成時に埋め込みタグよりもファイル名からのメタデータを優先します（非対話モード）。競合解決のための対話プロンプトをスキップします。
+.TP
+.BR \-v ", " \-\-version
+バージョン情報を表示して終了します。
+.TP
+.BR \-h ", " \-\-help
+ヘルプメッセージを表示して終了します。
+.SH タグ管理モード
+.SS "ワークフロー概要"
+タグ管理は YAML 設定を使った宣言的アプローチに従います:
+.PP
+.B 1. 現在の状態から YAML を生成
+.br
+.RS
+$ tagger --execute
+.RE
+.PP
+カレントディレクトリ内のすべての .mp3 および .m4a ファイルをスキャンし、メタデータを読み取り、現在の状態を含む tagger.yaml を作成します。
+.PP
+.B 2. 希望する状態に YAML を編集
+.br
+.RS
+tagger.yaml を編集して、希望するタグとファイル名を定義します。
+.RE
+.PP
+.B 3. 変更をプレビュー
+.br
+.RS
+$ tagger tagger.yaml
+.RE
+.PP
+現在の状態と YAML の差分を表示します（ドライランモード）。
+.PP
+.B 4. 変更を適用
+.br
+.RS
+$ tagger --execute tagger.yaml
+.RE
+.PP
+タグを適用し、YAML 設定に合わせてファイルをリネームします。
+.SS "YAML 設定フォーマット"
+.PP
+YAML ファイルには2つの主要セクションがあります:
+.PP
+.B defaults
+（オプション） - すべてのファイルに適用される共通メタデータ:
+.RS
+.nf
+defaults:
+  album: "アルバム名"
+  albumartist: "アーティスト名"
+  genre: "Electronic"
+  year: 2025
+  artwork: "cover.jpg"
+  compilation: true
+  label: "レーベル名"
+  bandcamp_id: "123456"
+  disc: 1
+.fi
+.RE
+.PP
+.B files
+（必須） - 個別ファイル設定のリスト:
+.RS
+.nf
+files:
+  - filename: "01 Track One.mp3"
+    track: 1
+    artist: "アーティスト名"
+    title: "トラック1"
+  - filename: "02 Track Two.mp3"
+    track: 2
+    artist: "アーティスト名"
+    title: "トラック2"
+.fi
+.RE
+.PP
+ファイル固有の値はデフォルトを上書きします。
+.I filename
+フィールドは必須で、変更対象のファイルを識別します。
+.SS "ファイル名解析パターン"
+.PP
+タグが欠落している場合や --prefer-filename が使用された場合、tagger はこれらのパターンを使ってファイル名からメタデータを自動的に解析します（優先順位順）:
+.PP
+.B 1. Bandcamp フォーマット:
+.br
+.RS
+Label - Artist - Title [ID].mp3
+.RE
+.PP
+.B 2. ドット付きトラック番号 + アーティスト + タイトル:
+.br
+.RS
+1. Artist - Title.mp3
+.br
+トラック番号はドット表記を使用。
+.RE
+.PP
+.B 3. トラック番号 + アーティスト + タイトル:
+.br
+.RS
+01 Artist - Title.mp3
+.br
+1桁以上の先行ゼロ付きトラック番号。
+.RE
+.PP
+.B 4. トラック番号 + タイトル（アーティストなし）:
+.br
+.RS
+01  - Title.mp3
+.br
+注: アーティストがない場合、ハイフンの前に2つのスペース。
+.RE
+.PP
+.B 5. トラック番号 + タイトル（区切りなし）:
+.br
+.RS
+01 Title.mp3
+.RE
+.PP
+.B 6. アーティスト + タイトル（トラック番号なし）:
+.br
+.RS
+Artist - Title.mp3
+.RE
+.PP
+.B 7. タイトルのみ:
+.br
+.RS
+Title.mp3
+.RE
+.PP
+すべてのパターンは柔軟な空白（区切り記号の前後に1つ以上のスペース）をサポートします。
+.SS "ファイル名生成ルール"
+.PP
+Tagger はこれらのルールを使ってタグからファイル名を生成します:
+.PP
+.B トラック番号とアーティストあり:
+.br
+.RS
+01 Artist - Title.mp3
+.RE
+.PP
+.B トラック番号あり、アーティストなし:
+.br
+.RS
+01  - Title.mp3
+.br
+注: ハイフンの前に2つのスペース。
+.RE
+.PP
+.B アーティストあり、トラック番号なし:
+.br
+.RS
+Artist - Title.mp3
+.RE
+.PP
+.B タイトルのみ:
+.br
+.RS
+Title.mp3
+.RE
+.PP
+トラック番号は最大トラック番号に基づいてゼロ埋めされます（最小2桁）。例えば、最大トラックが99の場合、すべてのトラックは2桁（01-99）を使用します。最大が100の場合、すべて3桁（001-100）を使用します。
+.SS "タグの比較と更新"
+.PP
+Tagger はスマート比較を使用して不要な書き込みを最小限に抑えます:
+.PP
+.B 1. 指定されたフィールドのみを比較
+.br
+YAML に存在しないフィールドは無視されます（ファイル内で変更されません）。
+.PP
+.B 2. アートワーク比較
+.br
+YAML がアートワークファイルを指定した場合、tagger は埋め込みアートワークと外部アートワークの SHA256 ハッシュを比較して、冗長な更新を回避します。
+.PP
+.B 3. バッチ更新
+.br
+ファイルのすべてのタグ更新は、ファイルの整合性を保つために単一の書き込み操作で行われます。
+.SS "ファイル変換"
+.PP
+Tagger は ffmpeg を使用して .aac ファイルを .m4a フォーマットに自動変換します:
+.RS
+.IP \(bu 3
+ロスレスコンテナ変換（再エンコードなし）
+.IP \(bu 3
+変換成功後、元の .aac ファイルは削除されます
+.IP \(bu 3
+タグ操作の前に変換が行われます
+.RE
+.SS "アートワーク自動取得"
+.PP
+Tagger は YAML ファイル生成時に YouTube および Bandcamp からアートワークを自動的にダウンロードして埋め込みます。
+.PP
+.B YouTube サムネイル:
+.PP
+ファイルのコメントフィールドに YouTube URL がある場合（例:
+.I "Artist - Song [VIDEO_ID].mp3"
+という名前のファイル）、tagger は:
+.RS
+.IP 1. 4
+ファイル名から YouTube ビデオ ID を抽出
+.IP 2. 4
+コメントタグに完全な YouTube URL を保存
+.IP 3. 4
+yt-dlp を使用してビデオサムネイルをダウンロード
+.IP 4. 4
+オプションで正方形アスペクト比にクロップ（
+.B --thumbnail-crop
+に基づく）
+.IP 5. 4
+.B cover.jpg
+（単一ファイル）または
+.B youtube_VIDEO_ID.jpg
+（複数ファイル）として保存
+.IP 6. 4
+YAML のアートワークフィールドをサムネイルを参照するように設定
+.RE
+.PP
+.B Bandcamp アートワーク:
+.PP
+ファイルのコメントフィールドに Bandcamp URL がある場合、tagger は:
+.RS
+.IP 1. 4
+コメントタグ内の Bandcamp URL を検出
+.IP 2. 4
+yt-dlp を使用してアルバム/トラックアートワークをダウンロード
+.IP 3. 4
+オプションで正方形アスペクト比にクロップ（
+.B --thumbnail-crop
+に基づく）
+.IP 4. 4
+.B cover.jpg
+（単一ファイル）または
+.B bandcamp_{label}_{album}.jpg
+（複数アルバム）として保存
+.IP 5. 4
+YAML のアートワークフィールドをアートワークを参照するように設定
+.RE
+.PP
+対応する Bandcamp URL フォーマット:
+.RS
+.IP \(bu 2
+https://LABEL.bandcamp.com/album/ALBUM-SLUG
+.IP \(bu 2
+https://LABEL.bandcamp.com/track/TRACK-SLUG
+.RE
+.PP
+.B YAML で URL を設定:
+.PP
+コメントフィールドに YouTube または Bandcamp URL を設定できます:
+.RS
+.nf
+defaults:
+  comment: https://label.bandcamp.com/album/album-name
+
+files:
+  - filename: "Track.mp3"
+    comment: https://www.youtube.com/watch?v=VIDEO_ID
+.fi
+.RE
+.PP
+.B サムネイルクロップオプション:
+.PP
+.B --thumbnail-crop
+オプションを使用してアートワークのクロップを制御します:
+.RS
+.IP \(bu 2
+.B auto
+（デフォルト） - 各サムネイルを正方形にクロップするか確認
+.IP \(bu 2
+.B square
+- 常に正方形にクロップ（中央クロップ）
+.IP \(bu 2
+.B none
+- 元のアスペクト比を維持
+.RE
+.PP
+.B 機能:
+.RS
+.IP \(bu 3
+スマート重複排除（同じ URL は1回のみダウンロード）
+.IP \(bu 3
+段階的劣化（YouTube には yt-dlp なしでも動作）
+.IP \(bu 3
+既存のアートワークは上書きしません
+.IP \(bu 3
+同じアルバムのファイル間で同じアートワークを共有
+.RE
+.SH 使用例
+.SS "タグ管理の例"
+.PP
+.B カレントディレクトリから YAML を生成:
+.RS
+$ tagger --execute
+.RE
+.PP
+.B YAML からタグを適用（ドライラン）:
+.RS
+$ tagger tagger.yaml
+.RE
+.PP
+.B YAML からタグを適用（実行）:
+.RS
+$ tagger --execute tagger.yaml
+.RE
+.PP
+.B タグよりファイル名を優先して YAML を生成:
+.RS
+$ tagger --execute --prefer-filename
+.RE
+.PP
+.B 現在の状態と YAML の差分を表示:
+.RS
+$ tagger
+.RE
+.PP
+（tagger.yaml が存在する場合、デフォルトモードは差分表示です）
+.SH 対応ファイル形式
+.PP
+.B オーディオフォーマット（タグ管理）:
+.RS
+.IP \(bu 3
+.B .mp3
+- ID3v2 タグ付き MPEG-1/2 Layer 3
+.IP \(bu 3
+.B .m4a
+- MP4 タグ付き MPEG-4 Audio
+.IP \(bu 3
+.B .aac
+- Raw AAC（自動的に .m4a に変換）
+.RE
+.PP
+.B オーディオフォーマット（セグメンテーション）:
+.RS
+.IP \(bu 3
+ffmpeg/audioread でサポートされる任意のフォーマット
+.IP \(bu 3
+テスト済み: .mp3, .m4a, .aac, .wav, .flac, .ogg
+.RE
+.PP
+.B アートワークフォーマット:
+.RS
+.IP \(bu 3
+.jpg, .jpeg (MIME: image/jpeg)
+.IP \(bu 3
+.png (MIME: image/png)
+.RE
+.SH ファイル
+.TP
+.B tagger.yaml
+タグ管理用のデフォルト YAML 設定ファイル。
+.TP
+.B *.cue
+.TP
+.B *.aac
+M4A/MP4 フォーマットから変換する際に mp3DirectCut 互換性のために作成される AAC ファイル（キャッシュ）。
+.SH 環境変数
+.TP
+.TP
+.TP
+.TP
+.SH 依存関係
+.PP
+.B コア依存関係（常に必要）:
+.RS
+.IP \(bu 3
+mutagen >= 1.45.0 - オーディオタグ操作
+.IP \(bu 3
+PyYAML >= 6.0 - YAML 設定処理
+.IP \(bu 3
+pydantic >= 2.0.0 - YAML スキーマ検証
+.RE
+.PP
+.PP
+.PP
+.B 外部依存関係:
+.RS
+.IP \(bu 3
+ffmpeg - オーディオ/ビデオ処理（.aac 変換に必要）
+.IP \(bu 3
+ffprobe - フォーマット検出（ffmpeg にバンドル）
+.IP \(bu 3
+.RE
+.SH 終了ステータス
+.TP
+.B 0
+成功
+.TP
+.B 1
+一般エラー（無効な引数、ファイルが見つからない、など）
+.SH 診断
+.PP
+.B よくあるエラーと解決方法:
+.PP
+.B "Error: mutagen is not installed"
+.RS
+mutagen をインストール: pip install mutagen
+.RE
+.PP
+.B "Error: pydantic is not installed"
+.RS
+pydantic をインストール: pip install pydantic
+.RE
+.PP
+.B "Error: librosa is not installed"
+.RS
+librosa と依存関係をインストール: pip install librosa
+.RE
+.PP
+.B "Warning: ffmpeg not found"
+.RS
+パッケージマネージャーで ffmpeg をインストール（macOS では brew install ffmpeg）
+.RE
+.PP
+.B "YAML validation failed"
+.RS
+よくある問題:
+.IP \(bu 3
+フィールド名のタイプミス（例: 'default' の代わりに 'defaults'）
+.IP \(bu 3
+間違ったデータ型（例: 数値の代わりに文字列の year）
+.IP \(bu 3
+必須フィールドの欠落（filename）
+.IP \(bu 3
+無効な年の範囲（1900-2100 である必要があります）
+.IP \(bu 3
+無効なトラック/ディスク番号（正の数である必要があります）
+.RE
+.PP
+.B "scipy.sparse.linalg.ArpackNoConvergence"
+.RS
+疎行列固有値計算が失敗しました（非常に稀）。回避策: より小さいチャンクサイズを使用するか、コード内の k パラメータを減らします。
+.RE
+.SH シェル補完
+.PP
+Homebrew 経由でインストールした場合、Bash、Zsh、Fish シェル用のシェル補完が自動的に設定されます。
+補完は、コマンドラインオプションやファイルタイプのインテリジェントなタブ補完を提供します。
+.PP
+.B Bash
+.RS
+Homebrew 経由で bash-completion がインストールされている場合、補完は自動的にロードされます。
+.RE
+.PP
+.B Zsh
+.RS
+補完は自動的にロードされます。
+.I .zshrc
+設定ファイルで
+.I compinit
+が呼び出されていることを確認してください。
+.RE
+.PP
+.B Fish
+.RS
+補完は Fish シェルによって自動的にロードされます。
+.RE
+.PP
+.B 機能
+.RS
+.IP \(bu 3
+コマンドラインオプション補完（--execute など）
+.IP \(bu 3
+コンテキストに応じたファイル補完:
+.RS
+.IP \(bu 3
+位置引数と -o/--output 用の YAML ファイル
+.IP \(bu 3
+.IP \(bu 3
+.IP \(bu 3
+.RE
+.IP \(bu 3
+.RE
+.SH バグ
+.PP
+バグ報告: https://github.com/delphinus/homebrew-tagger/issues
+.SH 著者
+.PP
+delphinus によって作成されました。
+.SH 著作権
+.PP
+Copyright © 2025 delphinus. MIT ライセンスの下でライセンスされています。
+.SH 関連項目
+.PP
+.BR mutagen (1),
+.BR ffmpeg (1),
+.BR mp3DirectCut (1)
+.PP
+プロジェクトホームページ: https://github.com/delphinus/homebrew-tagger
+.PP
+AcoustID: https://acoustid.org
+.PP
+MusicBrainz: https://musicbrainz.org

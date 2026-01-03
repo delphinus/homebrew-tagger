@@ -36,6 +36,12 @@ To enable completions:
 - **Zsh**: Completions are automatically loaded (ensure `compinit` is called in your `.zshrc`)
 - **Fish**: Completions are automatically loaded
 
+**Man Pages**: When installed via Homebrew, comprehensive man pages are automatically installed:
+- English: `man tagger`
+- Japanese: `LANG=ja_JP.UTF-8 man tagger`
+
+The man pages include detailed documentation for all command-line options, workflow examples, and troubleshooting guides.
+
 ### Using pip
 
 ```bash
