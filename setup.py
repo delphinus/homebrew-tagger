@@ -16,6 +16,7 @@ setup(
     long_description_content_type="text/markdown",
     author="delphinus",
     url="https://github.com/delphinus/tagger",
+    packages=[],  # No Python packages, only script
     scripts=["tagger"],
     install_requires=[
         "mutagen>=1.45.0",
