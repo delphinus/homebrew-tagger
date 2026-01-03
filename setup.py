@@ -16,26 +16,16 @@ setup(
     long_description_content_type="text/markdown",
     author="delphinus",
     url="https://github.com/delphinus/tagger",
-    py_modules=["segmenter", "tracklist_parser", "music_recognizer"],
     scripts=["tagger"],
     install_requires=[
         "mutagen>=1.45.0",
         "PyYAML>=6.0",
         "pydantic>=2.0.0",
-        "pyacoustid>=1.3.0",  # For music recognition (AcoustID)
-        "shazamio>=0.8.0",  # For music recognition (Shazam fallback)
         "yt-dlp>=2024.0.0",  # For YouTube thumbnail fetching
         "requests>=2.31.0",  # For direct URL downloads (YouTube fallback, SoundCloud)
         "Pillow>=10.0.0",  # For YouTube thumbnail cropping
     ],
     extras_require={
-        "segmentation": [
-            "librosa>=0.10.0",
-            "numpy>=1.24.0",
-            "pyperclip>=1.8.0",  # For clipboard support
-            "beautifulsoup4>=4.12.0",  # For HTML parsing
-            "tqdm>=4.66.0",  # For progress bars
-        ],
         "youtube": [
             # Pillow is now in install_requires (required dependency)
         ],

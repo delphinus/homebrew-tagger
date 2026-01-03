@@ -12,32 +12,12 @@ _tagger() {
 
     # All options
     opts="-e --execute -o --output -v --version -h --help --no-color --prefer-filename"
-    opts="$opts --segment --sensitivity --tracklist --tracklist-file --tracklist-clipboard"
-    opts="$opts --recognize --verify-boundaries"
 
     # Options that require a value
     case "$prev" in
         -o|--output)
-            # Complete with .yaml or .cue files
-            COMPREPLY=( $(compgen -f -X '!*.@(yaml|yml|cue)' -- "$cur") )
-            return 0
-            ;;
-        --segment)
-            # Complete with audio files
-            COMPREPLY=( $(compgen -f -X '!*.@(mp3|m4a|aac|wav|flac|ogg)' -- "$cur") )
-            return 0
-            ;;
-        --sensitivity)
-            # No completion for numeric value
-            return 0
-            ;;
-        --tracklist|--tracklist-file)
-            # Complete with text files or URLs
-            if [[ "$cur" == http* ]]; then
-                # Don't complete URLs
-                return 0
-            fi
-            COMPREPLY=( $(compgen -f -X '!*.@(txt|md)' -- "$cur") )
+            # Complete with .yaml files
+            COMPREPLY=( $(compgen -f -X '!*.@(yaml|yml)' -- "$cur") )
             return 0
             ;;
         *)

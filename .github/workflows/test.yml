@@ -27,17 +27,17 @@ jobs:
       if: runner.os == 'Linux'
       run: |
         sudo apt-get update
-        sudo apt-get install -y ffmpeg libsndfile1
+        sudo apt-get install -y ffmpeg
 
     - name: Install system dependencies (macOS)
       if: runner.os == 'macOS'
       run: |
-        brew install ffmpeg libsndfile
+        brew install ffmpeg
 
     - name: Install Python dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -e .[test,segmentation]
+        pip install -e .[test]
 
     - name: Run tests with pytest
       run: |
@@ -141,12 +141,6 @@ jobs:
           ${TAGGER_VENV}/bin/python -c "import mutagen; print('✓ mutagen: installed')"
           ${TAGGER_VENV}/bin/python -c "import pydantic; print('✓ pydantic:', pydantic.__version__)"
           ${TAGGER_VENV}/bin/python -c "import yaml; print('✓ pyyaml: installed')"
-          echo ""
-          echo "=== Segmentation dependencies ==="
-          ${TAGGER_VENV}/bin/python -c "import soundfile; print('✓ soundfile:', soundfile.__version__)"
-          ${TAGGER_VENV}/bin/python -c "import scipy; print('✓ scipy:', scipy.__version__)"
-          ${TAGGER_VENV}/bin/python -c "import sklearn; print('✓ scikit-learn:', sklearn.__version__)"
-          ${TAGGER_VENV}/bin/python -c "import numba; print('✓ numba:', numba.__version__)"
           echo ""
           echo "=== All required modules are installed correctly ==="
         else
