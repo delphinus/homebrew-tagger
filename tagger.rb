@@ -126,7 +126,7 @@ class Tagger < Formula
 
     # Install man pages
     man1.install "man/tagger.1"
-    (man1/"ja").install "man/ja/tagger.1"
+    (man/"ja/man1").install "man/ja/tagger.1"
 
     # Install shell completions
     bash_completion.install "completions/tagger.bash" => "tagger"
@@ -150,6 +150,6 @@ class Tagger < Formula
 
     # Test man page installation
     assert_predicate man1/"tagger.1", :exist?, "English man page should be installed"
-    assert_predicate man1/"ja/tagger.1", :exist?, "Japanese man page should be installed"
+    assert_predicate man/"ja/man1/tagger.1", :exist?, "Japanese man page should be installed"
   end
 end
