@@ -13,9 +13,11 @@
 1. **Version Consistency**
    - `tagger` script: `__version__` variable (line 9)
    - `setup.py`: `version` parameter (line 13)
-   - `man/tagger.1`: Man page header (line 1, `.TH` directive)
+   - `man/tagger.1`: English man page header (line 1, `.TH` directive)
+   - `man/ja/tagger.1`: Japanese man page header (line 1, `.TH` directive)
    - `tagger.rb`: Homebrew formula URL tag
-   - All four must match for releases
+   - **All five must match for releases**
+   - **CRITICAL: When updating versions, update BOTH English and Japanese man pages**
 
 2. **CI Version Checks**
    - `.github/workflows/ci.yml` - Verifies version consistency in PRs
@@ -38,7 +40,7 @@
    1. Go to Actions → Release → Run workflow
    2. Enter the new version number (e.g., 1.15.9)
    3. The workflow automatically:
-      - Updates version in tagger, setup.py, and man page
+      - Updates version in tagger, setup.py, and man pages (both English and Japanese)
       - Commits the version bump
       - Creates and pushes the tag
       - Creates GitHub release
@@ -230,26 +232,29 @@ Files that must have matching versions:
 
 ## Documentation Synchronization
 
-**CRITICAL: Keep README and Man Page in Sync**
+**CRITICAL: Keep README and Man Pages in Sync**
 
 When making changes that affect user-facing features, command-line options, or behavior:
 
 ❌ **FORBIDDEN:**
-- Updating only README or only man page
+- Updating only README or only one man page
 - Leaving documentation inconsistent between files
-- Documenting features in one place but not the other
-- Assuming "I'll update the other later"
+- Documenting features in one place but not the others
+- Assuming "I'll update the others later"
+- Updating English man page but forgetting Japanese man page
 
 ✓ **REQUIRED:**
-- **ALWAYS update BOTH README.md and man/tagger.1 together**
-- Ensure examples are consistent across both documents
+- **ALWAYS update ALL THREE: README.md, man/tagger.1, and man/ja/tagger.1 together**
+- Ensure examples are consistent across all documents
 - Keep option descriptions identical
-- Update version-specific information in both places
-- Verify both files before committing
+- Update version-specific information in all files
+- Verify all three files before committing
+- **When updating man pages, translate changes to Japanese man page**
 
 **Files to synchronize:**
 - `README.md` - User-facing documentation in Markdown
-- `man/tagger.1` - Comprehensive man page in groff format
+- `man/tagger.1` - English man page in groff format
+- `man/ja/tagger.1` - Japanese man page in groff format (translation of English version)
 
 **When to update both:**
 - Adding new command-line options or flags
@@ -262,17 +267,19 @@ When making changes that affect user-facing features, command-line options, or b
 
 **Verification checklist:**
 1. Does README.md reflect the change?
-2. Does man/tagger.1 reflect the change?
-3. Are examples consistent between both?
-4. Are all options documented in both?
-5. Are version numbers updated in both (if applicable)?
+2. Does man/tagger.1 (English) reflect the change?
+3. Does man/ja/tagger.1 (Japanese) reflect the change?
+4. Are examples consistent across all three files?
+5. Are all options documented in all three files?
+6. Are version numbers updated in all files (if applicable)?
 
 **Rationale:**
 - Users read different documentation sources
 - Man pages are the canonical Unix documentation
 - README is often the first thing users see
+- Japanese-speaking users rely on the Japanese man page
 - Inconsistent docs cause confusion and support burden
-- Both are installed and distributed with the package
+- All three files are installed and distributed with the package
 
 ## Automatic Release Workflow
 
