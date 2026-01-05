@@ -44,16 +44,17 @@ jobs:
           exit 1
         fi
 
-    - name: Update version in setup.py, tagger, and man page
+    - name: Update version in setup.py, tagger, and man pages
       run: |
         sed -i 's/version="[0-9.]*"/version="${{ inputs.version }}"/' setup.py
         sed -i 's/__version__ = "[0-9.]*"/__version__ = "${{ inputs.version }}"/' tagger
         sed -i 's/^\.TH TAGGER 1 "\(.*\)" "tagger [0-9.]*"/\.TH TAGGER 1 "\1" "tagger ${{ inputs.version }}"/' man/tagger.1
-        git diff setup.py tagger man/tagger.1
+        sed -i 's/^\.TH TAGGER 1 "\(.*\)" "tagger [0-9.]*"/\.TH TAGGER 1 "\1" "tagger ${{ inputs.version }}"/' man/ja/tagger.1
+        git diff setup.py tagger man/tagger.1 man/ja/tagger.1
 
     - name: Commit version bump
       run: |
-        git add setup.py tagger man/tagger.1
+        git add setup.py tagger man/tagger.1 man/ja/tagger.1
         git commit -m "chore: bump version to ${{ inputs.version }}"
 
     - name: Create and push tag
