@@ -170,6 +170,105 @@ files:
   comment: https://label.bandcamp.com/track/track-name
 ```
 
+## Reminder Integration (macOS only)
+
+Tagger can add URLs to macOS Reminders app with intelligent title extraction from audio metadata or web pages.
+
+### Features
+
+- **Smart title extraction**: Uses audio file metadata (Artist - Title), or extracts from YouTube/Bandcamp/web pages
+- **Interactive list selection**: Choose which Reminders list to use
+- **Dry-run preview**: See what will be added before committing
+- **Flexible title options**: Manual override, audio metadata, or URL extraction
+- **Custom notes**: Add additional context to reminders
+
+### Usage
+
+```bash
+# Add URL with auto-extracted title (dry-run)
+tagger reminder add "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+
+# Add URL with auto-extracted title (execute)
+tagger reminder add "https://www.youtube.com/watch?v=dQw4w9WgXcQ" --execute
+
+# Use audio file metadata for title (if URL matches file's comment field)
+tagger reminder add "https://youtube.com/watch?v=VIDEO_ID" --match-audio --execute
+
+# Add with custom title and notes
+tagger reminder add "https://example.com" --title "Listen later" --notes "Friend's recommendation" --execute
+
+# Add to specific list without interactive selection
+tagger reminder add "https://example.com" --list "Music" --execute
+```
+
+### Title Resolution
+
+When adding a reminder, tagger determines the title in this order:
+
+1. **Manual override**: `--title "Custom Title"` takes highest priority
+2. **Audio metadata**: If `--match-audio` is used and URL matches an audio file's comment field, extracts "Artist - Title" from tags
+3. **URL extraction**:
+   - For YouTube: Uses yt-dlp to get "Channel - Video Title"
+   - For Bandcamp: Uses yt-dlp to get "Artist - Album/Track"
+   - For other sites: Extracts HTML `<title>` tag
+4. **Error**: If all extraction methods fail, displays error with suggestion to use `--title`
+
+### Examples
+
+```bash
+# Scenario 1: Audio file exists with YouTube URL in comment
+# File: "Rick Astley - Never Gonna Give You Up [dQw4w9WgXcQ].mp3"
+# Tags: artist="Rick Astley", title="Never Gonna Give You Up", comment="https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+
+tagger reminder add "https://www.youtube.com/watch?v=dQw4w9WgXcQ" --match-audio --execute
+# Result: Title = "Rick Astley - Never Gonna Give You Up" (from audio file tags)
+
+# Scenario 2: No matching audio file, extract from YouTube
+tagger reminder add "https://www.youtube.com/watch?v=dQw4w9WgXcQ" --execute
+# Result: Title = "Rick Astley - Never Gonna Give You Up (Official Music Video)" (from yt-dlp)
+
+# Scenario 3: Generic web page
+tagger reminder add "https://www.python.org" --execute
+# Result: Title = "Welcome to Python.org" (from HTML <title> tag)
+
+# Scenario 4: Custom title override
+tagger reminder add "https://example.com" --title "Check this out later" --execute
+# Result: Title = "Check this out later" (manual override)
+```
+
+### Command-line Options
+
+- `url` (required): URL to add to Reminders
+- `-t, --title`: Custom title (overrides auto-extraction)
+- `-l, --list`: Reminder list name (skips interactive selection)
+- `-n, --notes`: Additional notes to attach to reminder
+- `--match-audio`: Match URL with audio files in current directory and use their metadata
+
+### Platform Requirements
+
+- **macOS only**: Uses AppleScript to interact with Reminders app
+- **Reminders app**: At least one reminder list must exist
+- **Dependencies**: yt-dlp (already required), standard library only
+
+### Integration with Tagger Workflow
+
+The reminder feature works seamlessly with tagger's tag management:
+
+```bash
+# 1. Download audio from YouTube
+yt-dlp "https://www.youtube.com/watch?v=VIDEO_ID"
+
+# 2. Generate YAML with tagger (automatically adds YouTube URL to comment field)
+tagger --execute
+
+# 3. Add reminder using audio metadata
+tagger reminder add "https://www.youtube.com/watch?v=VIDEO_ID" --match-audio --execute
+# Uses artist/title from audio file instead of generic YouTube title
+
+# 4. Later: Apply tags and organize files
+tagger --execute tagger.yaml
+```
+
 ## Usage
 
 ### AAC to M4A Conversion

@@ -321,6 +321,122 @@ Won't override existing artwork
 .IP \(bu 3
 Same artwork shared across files from same album
 .RE
+.SH REMINDER INTEGRATION (macOS only)
+.PP
+Tagger can add URLs to macOS Reminders app with intelligent title extraction from audio metadata or web pages. This feature is only available on macOS as it uses AppleScript to interact with the Reminders app.
+.SS "Reminder Subcommand"
+.B tagger reminder add
+[\fB\-t\fR \fITITLE\fR] [\fB\-l\fR \fILIST\fR] [\fB\-n\fR \fINOTES\fR] [\fB\-\-match\-audio\fR] \fIURL\fR
+.PP
+Add a URL to macOS Reminders with automatic title extraction.
+.SS "Reminder Options"
+.TP
+.I URL
+URL to add to reminders (required).
+.TP
+.BR \-t ", " \-\-title " " \fITITLE\fR
+Custom title for the reminder. If not provided, title will be extracted from the URL or audio file metadata.
+.TP
+.BR \-l ", " \-\-list " " \fILIST\fR
+Reminder list name. If not provided, shows interactive selection menu.
+.TP
+.BR \-n ", " \-\-notes " " \fINOTES\fR
+Additional notes to attach to the reminder.
+.TP
+.BR \-\-match\-audio
+Try to match URL with audio files in current directory and use their metadata for the title.
+.SS "Title Resolution Priority"
+When adding a reminder, tagger determines the title in this order:
+.PP
+.B 1. Manual override
+.br
+If
+.B --title
+is specified, uses that value directly.
+.PP
+.B 2. Tagger metadata
+.br
+If
+.B --match-audio
+is used and the URL matches an audio file's comment field, extracts "Artist - Title" from the file's tags.
+.PP
+.B 3. URL extraction
+.br
+Uses yt-dlp for YouTube/Bandcamp URLs (gets enhanced metadata like "Channel - Video Title"), or extracts HTML <title> tag for other websites.
+.PP
+.B 4. Error
+.br
+If extraction fails, displays error and suggests using
+.B --title
+.
+.SS "Reminder Examples"
+.PP
+.B Add YouTube URL with auto-extracted title (dry-run):
+.RS
+$ tagger reminder add "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+.RE
+.PP
+.B Add YouTube URL with auto-extracted title (execute):
+.RS
+$ tagger reminder add "https://www.youtube.com/watch?v=dQw4w9WgXcQ" --execute
+.RE
+.PP
+.B Use audio file metadata for title:
+.RS
+$ tagger reminder add "https://youtube.com/watch?v=VIDEO_ID" --match-audio --execute
+.RE
+.PP
+Assumes an audio file exists with
+.I comment
+field containing the same URL. Extracts artist and title from the file's tags instead of from YouTube.
+.PP
+.B Add with custom title and notes:
+.RS
+$ tagger reminder add "https://example.com" --title "Listen later" --notes "Recommended" --execute
+.RE
+.PP
+.B Add to specific list without interactive selection:
+.RS
+$ tagger reminder add "https://example.com" --list "Music" --execute
+.RE
+.PP
+.B Preview reminder without adding (dry-run):
+.RS
+$ tagger reminder add "https://example.com"
+.RE
+.PP
+Shows what reminder would be created without actually adding it.
+.SS "Platform Requirements"
+.TP
+.B macOS only
+This feature requires macOS and uses AppleScript to interact with the Reminders app. On non-macOS platforms, the command will fail with a clear error message.
+.TP
+.B Reminders app
+At least one reminder list must exist in the Reminders app. If no lists are found, the command will fail.
+.TP
+.B Dependencies
+Uses yt-dlp (already required for artwork fetching) and standard library only. No additional dependencies needed.
+.SS "Integration with Tag Management"
+The reminder feature works seamlessly with tagger's tag management workflow:
+.PP
+.B Example workflow:
+.RS
+.nf
+# 1. Download audio from YouTube
+$ yt-dlp "https://www.youtube.com/watch?v=VIDEO_ID"
+
+# 2. Generate YAML (adds YouTube URL to comment field)
+$ tagger --execute
+
+# 3. Add reminder using audio metadata
+$ tagger reminder add "https://www.youtube.com/watch?v=VIDEO_ID" --match-audio --execute
+
+# Uses artist/title from audio file instead of generic YouTube title
+
+# 4. Later: Apply tags and organize files
+$ tagger --execute tagger.yaml
+.fi
+.RE
 .SH EXAMPLES
 .SS "Tag Management Examples"
 .PP

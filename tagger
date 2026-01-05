@@ -2104,49 +2104,187 @@ class Tagger:
             self.log(f"Updated {yaml_file} with new filenames")
 
 
+def handle_reminder_command(args, tagger_instance):
+    """Handle reminder subcommand
+
+    Args:
+        args: Parsed command line arguments
+        tagger_instance: Tagger instance with execute/no_color settings
+    """
+    import platform
+
+    # Platform check
+    if platform.system() != "Darwin":
+        tagger_instance.log("Error: Reminder functionality requires macOS")
+        sys.exit(1)
+
+    # Import reminder module
+    try:
+        import reminder
+    except ImportError:
+        tagger_instance.log("Error: reminder module not found")
+        sys.exit(1)
+
+    if args.reminder_command == "add":
+        handle_reminder_add(args, tagger_instance)
+    else:
+        tagger_instance.log("Error: Unknown reminder command")
+        sys.exit(1)
+
+
+def handle_reminder_add(args, tagger_instance):
+    """Handle 'tagger reminder add' command
+
+    Title resolution priority:
+    1. args.title (manual override)
+    2. Tagger metadata (if --match-audio and file found)
+    3. URL extraction (yt-dlp or HTML)
+
+    Args:
+        args: Parsed command line arguments
+        tagger_instance: Tagger instance
+    """
+    import reminder
+
+    url = args.url
+    title = args.title
+    list_name = args.list
+    notes = args.notes
+
+    # Try to get title from tagger metadata if requested
+    if not title and args.match_audio:
+        title = extract_title_from_tagger_metadata(url, tagger_instance)
+        if title:
+            tagger_instance.log(f"Found title from audio file: {title}")
+
+    # Fallback to URL extraction
+    if not title:
+        tagger_instance.log("Extracting title from URL...")
+        title = reminder.extract_title_from_url(url)
+        if not title:
+            tagger_instance.log("Error: Could not extract title from URL")
+            tagger_instance.log("Please specify --title manually")
+            sys.exit(1)
+        tagger_instance.log(f"Extracted title: {title}")
+
+    # Get reminder list
+    if not list_name:
+        if tagger_instance.dry_run:
+            tagger_instance.log("Would show interactive list selection")
+            list_name = "Reminders"  # Default for dry-run
+        else:
+            lists = reminder.get_reminder_lists()
+            if not lists:
+                tagger_instance.log("Error: No reminder lists found")
+                sys.exit(1)
+            list_name = reminder.select_reminder_list(lists)
+            if not list_name:
+                sys.exit(1)
+
+    # Dry-run preview
+    if tagger_instance.dry_run:
+        print("\n" + tagger_instance.color("=" * 60, "dim"))
+        print(tagger_instance.color("REMINDER PREVIEW (Dry-run)", "yellow", "bold"))
+        print(tagger_instance.color("=" * 60, "dim"))
+        print(f"  List:  {list_name}")
+        print(f"  Title: {title}")
+        print(f"  URL:   {url}")
+        if notes:
+            print(f"  Notes: {notes}")
+        print(tagger_instance.color("=" * 60, "dim"))
+        print(
+            f"\n{tagger_instance.color('Note:', 'cyan')} Use --execute to actually add the reminder"
+        )
+        return
+
+    # Execute mode: add the reminder
+    tagger_instance.log(f"Adding reminder to '{list_name}'...")
+    if reminder.add_reminder(list_name, title, notes, url):
+        tagger_instance.log(
+            tagger_instance.color("✓ Successfully added reminder", "green")
+        )
+    else:
+        tagger_instance.log(tagger_instance.color("✗ Failed to add reminder", "red"))
+        sys.exit(1)
+
+
+def extract_title_from_tagger_metadata(url, tagger_instance):
+    """Extract title from tagger metadata by matching URL to audio files
+
+    Strategy:
+    1. Find audio files in current directory
+    2. Check if any file's comment field matches the URL
+    3. If match found, format title as "Artist - Title"
+
+    Args:
+        url: URL to match
+        tagger_instance: Tagger instance
+
+    Returns:
+        Formatted title string or None
+    """
+    files = tagger_instance.find_audio_files()
+
+    for filepath in files:
+        tags = tagger_instance.read_tags(filepath)
+        comment = tags.get("comment")
+
+        # Check if comment field contains the URL
+        if comment and url in comment:
+            artist = tags.get("artist")
+            title = tags.get("title")
+
+            if artist and title:
+                return f"{artist} - {title}"
+            elif title:
+                return title
+
+    # Try matching by YouTube video ID extraction
+    video_id = tagger_instance.extract_youtube_video_id(url)
+    if video_id:
+        for filepath in files:
+            tags = tagger_instance.read_tags(filepath)
+            comment = tags.get("comment")
+
+            if comment and video_id in comment:
+                artist = tags.get("artist")
+                title = tags.get("title")
+
+                if artist and title:
+                    return f"{artist} - {title}"
+                elif title:
+                    return title
+
+    return None
+
+
 def main():
+    # Create main parser with global options
     parser = argparse.ArgumentParser(
         description="Manage audio file tags and filenames using mutagen",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Show diff if tagger.yaml exists, otherwise generate YAML (dry-run)
-  tagger
+  # Tag management (default mode):
+  tagger                        # Show diff or generate YAML (dry-run)
+  tagger --execute              # Generate YAML
+  tagger tagger.yaml            # Apply tags (dry-run)
+  tagger --execute tagger.yaml  # Apply tags and execute
 
-  # Generate YAML and save it (even if tagger.yaml exists)
-  tagger --execute
-
-  # Apply tags from YAML (dry-run)
-  tagger tagger.yaml
-
-  # Apply tags from YAML and execute
-  tagger --execute tagger.yaml
-
-Note:
-  When running 'tagger' without arguments, if tagger.yaml exists in the current
-  directory, it will show differences between the current state and the YAML file.
-  This helps you see what has changed before updating the YAML or applying tags.
+  # Reminder management (macOS only):
+  tagger reminder add "https://example.com"                    # Add reminder (dry-run)
+  tagger reminder add "https://example.com" --execute          # Add reminder
+  tagger reminder add "https://example.com" --match-audio      # Use audio metadata for title
+  tagger reminder add URL --title "Custom Title" --execute     # Add with custom title
         """,
     )
 
-    parser.add_argument(
-        "yaml_file",
-        nargs="?",
-        help="YAML file with tag information (if not provided, generates YAML from current directory)",
-    )
-
+    # Global options (apply to all modes)
     parser.add_argument(
         "-e",
         "--execute",
         action="store_true",
         help="Execute changes (default is dry-run mode)",
-    )
-
-    parser.add_argument(
-        "-o",
-        "--output",
-        default="tagger.yaml",
-        help="Output YAML file name when generating (default: tagger.yaml)",
     )
 
     parser.add_argument(
@@ -2162,41 +2300,145 @@ Note:
         help="Disable colored output",
     )
 
-    parser.add_argument(
+    # Create subparsers for different modes
+    subparsers = parser.add_subparsers(dest="command", help="Commands")
+
+    # ========================================================================
+    # Tag management mode (default)
+    # ========================================================================
+    tag_parser = subparsers.add_parser(
+        "tag", add_help=False, help="Manage audio file tags (default mode)"
+    )
+
+    tag_parser.add_argument(
+        "yaml_file",
+        nargs="?",
+        help="YAML file with tag information (if not provided, generates YAML from current directory)",
+    )
+
+    tag_parser.add_argument(
+        "-o",
+        "--output",
+        default="tagger.yaml",
+        help="Output YAML file name when generating (default: tagger.yaml)",
+    )
+
+    tag_parser.add_argument(
         "--prefer-filename",
         action="store_true",
         help="Prefer metadata from filenames over embedded tags when generating YAML (non-interactive mode)",
     )
 
-    parser.add_argument(
+    tag_parser.add_argument(
         "--thumbnail-crop",
         choices=["auto", "square", "none"],
         default="auto",
         help="YouTube thumbnail cropping: 'auto' (ask for each), 'square' (crop to square), 'none' (keep original) (default: auto)",
     )
 
-    args = parser.parse_args()
+    # ========================================================================
+    # Reminder mode (macOS only)
+    # ========================================================================
+    reminder_parser = subparsers.add_parser(
+        "reminder", help="Manage macOS Reminders (macOS only)"
+    )
 
-    # Regular tagger mode
+    reminder_subparsers = reminder_parser.add_subparsers(
+        dest="reminder_command", help="Reminder commands"
+    )
+
+    # reminder add subcommand
+    add_parser = reminder_subparsers.add_parser(
+        "add", help="Add URL to macOS Reminders"
+    )
+
+    add_parser.add_argument("url", help="URL to add to reminders")
+
+    add_parser.add_argument(
+        "-t",
+        "--title",
+        help="Reminder title (if not provided, will be extracted from URL or audio metadata)",
+    )
+
+    add_parser.add_argument(
+        "-l",
+        "--list",
+        help="Reminder list name (if not provided, will show selection menu)",
+    )
+
+    add_parser.add_argument("-n", "--notes", help="Additional notes for the reminder")
+
+    add_parser.add_argument(
+        "--match-audio",
+        action="store_true",
+        help="Try to match URL with audio files in current directory and use their metadata for title",
+    )
+
+    # Parse arguments with backward compatibility handling
+    # Check if first positional arg is a known subcommand
+    import sys as sys_module
+
+    known_subcommands = {"reminder", "tag"}
+    argv = sys_module.argv[1:]  # Skip script name
+
+    # Find first non-flag argument
+    first_positional = None
+    for arg in argv:
+        if not arg.startswith("-") and not arg.startswith("--"):
+            first_positional = arg
+            break
+
+    # If first positional is not a known subcommand, prepend 'tag' for backward compat
+    if first_positional and first_positional not in known_subcommands:
+        # This is likely a yaml file, so we're in legacy mode
+        argv_modified = []
+        inserted_tag = False
+        for arg in argv:
+            if (
+                not inserted_tag
+                and not arg.startswith("-")
+                and not arg.startswith("--")
+            ):
+                argv_modified.append("tag")
+                inserted_tag = True
+            argv_modified.append(arg)
+        args = parser.parse_args(argv_modified)
+    else:
+        args = parser.parse_args()
+
+    # Default to tag mode if no subcommand specified
+    if args.command is None:
+        args.command = "tag"
+        # Set default values for tag mode options
+        args.yaml_file = None
+        args.output = "tagger.yaml"
+        args.prefer_filename = False
+        args.thumbnail_crop = "auto"
+
+    # Create Tagger instance (used by all modes for consistent logging/colors)
     tagger = Tagger(
         execute=args.execute,
         no_color=args.no_color,
-        prefer_filename=args.prefer_filename,
-        thumbnail_crop=args.thumbnail_crop,
+        prefer_filename=getattr(args, "prefer_filename", False),
+        thumbnail_crop=getattr(args, "thumbnail_crop", "auto"),
     )
 
-    if args.yaml_file:
-        # Apply mode
-        tagger.apply_yaml(args.yaml_file)
-    else:
-        # Generate/Diff mode
-        # If tagger.yaml exists in current directory, show diff instead of generating
-        if os.path.exists("tagger.yaml") and not args.execute:
-            tagger.show_diff("tagger.yaml")
+    # Route to appropriate handler
+    if args.command == "reminder":
+        handle_reminder_command(args, tagger)
+    else:  # 'tag' mode (default)
+        if args.yaml_file:
+            # Apply mode
+            tagger.apply_yaml(args.yaml_file)
         else:
-            # If --prefer-filename is set, skip interactive mode
-            interactive = not args.prefer_filename
-            tagger.generate_yaml(args.output, interactive=interactive)
+            # Generate/Diff mode
+            # If tagger.yaml exists in current directory, show diff instead of generating
+            if os.path.exists("tagger.yaml") and not args.execute:
+                tagger.show_diff("tagger.yaml")
+            else:
+                # If --prefer-filename is set, skip interactive mode
+                interactive = not args.prefer_filename
+                tagger.generate_yaml(args.output, interactive=interactive)
 
 
 if __name__ == "__main__":

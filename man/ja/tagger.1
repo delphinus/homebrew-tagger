@@ -318,6 +318,119 @@ files:
 .IP \(bu 3
 同じアルバムのファイル間で同じアートワークを共有
 .RE
+.SH リマインダー連携（macOS のみ）
+.PP
+Tagger は macOS のリマインダー App に URL を追加できます。オーディオファイルのメタデータやウェブページから自動的にタイトルを抽出します。この機能は macOS でのみ利用可能で、AppleScript を使用してリマインダー App と連携します。
+.SS "リマインダーサブコマンド"
+.B tagger reminder add
+[\fB\-t\fR \fITITLE\fR] [\fB\-l\fR \fILIST\fR] [\fB\-n\fR \fINOTES\fR] [\fB\-\-match\-audio\fR] \fIURL\fR
+.PP
+macOS リマインダーに URL を追加します。タイトルは自動的に抽出されます。
+.SS "リマインダーオプション"
+.TP
+.I URL
+リマインダーに追加する URL（必須）。
+.TP
+.BR \-t ", " \-\-title " " \fITITLE\fR
+リマインダーのカスタムタイトル。指定しない場合、URL またはオーディオファイルのメタデータからタイトルが抽出されます。
+.TP
+.BR \-l ", " \-\-list " " \fILIST\fR
+リマインダーリスト名。指定しない場合、対話式の選択メニューが表示されます。
+.TP
+.BR \-n ", " \-\-notes " " \fINOTES\fR
+リマインダーに添付する追加メモ。
+.TP
+.BR \-\-match\-audio
+カレントディレクトリのオーディオファイルと URL をマッチングし、そのメタデータをタイトルに使用します。
+.SS "タイトル解決の優先順位"
+リマインダーを追加する際、tagger は以下の順序でタイトルを決定します：
+.PP
+.B 1. 手動指定
+.br
+.B --title
+が指定された場合、その値を直接使用します。
+.PP
+.B 2. Tagger メタデータ
+.br
+.B --match-audio
+が使用され、URL がオーディオファイルのコメントフィールドと一致する場合、ファイルのタグから「アーティスト - タイトル」を抽出します。
+.PP
+.B 3. URL 抽出
+.br
+YouTube/Bandcamp URL には yt-dlp を使用（「チャンネル - 動画タイトル」などの拡張メタデータを取得）、その他のウェブサイトには HTML <title> タグを抽出します。
+.PP
+.B 4. エラー
+.br
+抽出に失敗した場合、エラーを表示し
+.B --title
+の使用を提案します。
+.SS "リマインダーの例"
+.PP
+.B YouTube URL をタイトル自動抽出で追加（ドライラン）:
+.RS
+$ tagger reminder add "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+.RE
+.PP
+.B YouTube URL をタイトル自動抽出で追加（実行）:
+.RS
+$ tagger reminder add "https://www.youtube.com/watch?v=dQw4w9WgXcQ" --execute
+.RE
+.PP
+.B オーディオファイルのメタデータをタイトルに使用:
+.RS
+$ tagger reminder add "https://youtube.com/watch?v=VIDEO_ID" --match-audio --execute
+.RE
+.PP
+.I comment
+フィールドに同じ URL を含むオーディオファイルが存在することを前提とします。YouTube からではなく、ファイルのタグからアーティストとタイトルを抽出します。
+.PP
+.B カスタムタイトルとメモ付きで追加:
+.RS
+$ tagger reminder add "https://example.com" --title "後で聴く" --notes "おすすめ" --execute
+.RE
+.PP
+.B 対話式選択なしで特定のリストに追加:
+.RS
+$ tagger reminder add "https://example.com" --list "ミュージック" --execute
+.RE
+.PP
+.B 追加せずにプレビュー（ドライラン）:
+.RS
+$ tagger reminder add "https://example.com"
+.RE
+.PP
+実際に追加せずに、作成されるリマインダーを表示します。
+.SS "プラットフォーム要件"
+.TP
+.B macOS のみ
+この機能は macOS が必要で、AppleScript を使用してリマインダー App と連携します。非 macOS プラットフォームでは、コマンドは明確なエラーメッセージで失敗します。
+.TP
+.B リマインダー App
+リマインダー App に少なくとも 1 つのリストが存在する必要があります。リストが見つからない場合、コマンドは失敗します。
+.TP
+.B 依存関係
+yt-dlp（アートワーク取得用に既に必要）と標準ライブラリのみを使用します。追加の依存関係は不要です。
+.SS "タグ管理との統合"
+リマインダー機能は tagger のタグ管理ワークフローとシームレスに連携します：
+.PP
+.B ワークフロー例:
+.RS
+.nf
+# 1. YouTube からオーディオをダウンロード
+$ yt-dlp "https://www.youtube.com/watch?v=VIDEO_ID"
+
+# 2. YAML を生成（コメントフィールドに YouTube URL を追加）
+$ tagger --execute
+
+# 3. オーディオメタデータを使用してリマインダーを追加
+$ tagger reminder add "https://www.youtube.com/watch?v=VIDEO_ID" --match-audio --execute
+
+# 汎用的な YouTube タイトルではなく、オーディオファイルのアーティスト/タイトルを使用
+
+# 4. 後で：タグを適用してファイルを整理
+$ tagger --execute tagger.yaml
+.fi
+.RE
 .SH 使用例
 .SS "タグ管理の例"
 .PP
