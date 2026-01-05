@@ -2348,7 +2348,9 @@ Examples:
     )
 
     # reminder add subcommand
-    add_parser = reminder_subparsers.add_parser("add", help="Add URL to macOS Reminders")
+    add_parser = reminder_subparsers.add_parser(
+        "add", help="Add URL to macOS Reminders"
+    )
 
     add_parser.add_argument("url", help="URL to add to reminders")
 
@@ -2364,9 +2366,7 @@ Examples:
         help="Reminder list name (if not provided, will show selection menu)",
     )
 
-    add_parser.add_argument(
-        "-n", "--notes", help="Additional notes for the reminder"
-    )
+    add_parser.add_argument("-n", "--notes", help="Additional notes for the reminder")
 
     add_parser.add_argument(
         "--match-audio",
@@ -2394,7 +2394,11 @@ Examples:
         argv_modified = []
         inserted_tag = False
         for arg in argv:
-            if not inserted_tag and not arg.startswith("-") and not arg.startswith("--"):
+            if (
+                not inserted_tag
+                and not arg.startswith("-")
+                and not arg.startswith("--")
+            ):
                 argv_modified.append("tag")
                 inserted_tag = True
             argv_modified.append(arg)
