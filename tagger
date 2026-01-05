@@ -2114,7 +2114,7 @@ def handle_reminder_command(args, tagger_instance):
     import platform
 
     # Platform check
-    if platform.system() != 'Darwin':
+    if platform.system() != "Darwin":
         tagger_instance.log("Error: Reminder functionality requires macOS")
         sys.exit(1)
 
@@ -2125,7 +2125,7 @@ def handle_reminder_command(args, tagger_instance):
         tagger_instance.log("Error: reminder module not found")
         sys.exit(1)
 
-    if args.reminder_command == 'add':
+    if args.reminder_command == "add":
         handle_reminder_add(args, tagger_instance)
     else:
         tagger_instance.log("Error: Unknown reminder command")
@@ -2192,13 +2192,17 @@ def handle_reminder_add(args, tagger_instance):
         if notes:
             print(f"  Notes: {notes}")
         print(tagger_instance.color("=" * 60, "dim"))
-        print(f"\n{tagger_instance.color('Note:', 'cyan')} Use --execute to actually add the reminder")
+        print(
+            f"\n{tagger_instance.color('Note:', 'cyan')} Use --execute to actually add the reminder"
+        )
         return
 
     # Execute mode: add the reminder
     tagger_instance.log(f"Adding reminder to '{list_name}'...")
     if reminder.add_reminder(list_name, title, notes, url):
-        tagger_instance.log(tagger_instance.color("✓ Successfully added reminder", "green"))
+        tagger_instance.log(
+            tagger_instance.color("✓ Successfully added reminder", "green")
+        )
     else:
         tagger_instance.log(tagger_instance.color("✗ Failed to add reminder", "red"))
         sys.exit(1)
@@ -2223,12 +2227,12 @@ def extract_title_from_tagger_metadata(url, tagger_instance):
 
     for filepath in files:
         tags = tagger_instance.read_tags(filepath)
-        comment = tags.get('comment')
+        comment = tags.get("comment")
 
         # Check if comment field contains the URL
         if comment and url in comment:
-            artist = tags.get('artist')
-            title = tags.get('title')
+            artist = tags.get("artist")
+            title = tags.get("title")
 
             if artist and title:
                 return f"{artist} - {title}"
@@ -2240,11 +2244,11 @@ def extract_title_from_tagger_metadata(url, tagger_instance):
     if video_id:
         for filepath in files:
             tags = tagger_instance.read_tags(filepath)
-            comment = tags.get('comment')
+            comment = tags.get("comment")
 
             if comment and video_id in comment:
-                artist = tags.get('artist')
-                title = tags.get('title')
+                artist = tags.get("artist")
+                title = tags.get("title")
 
                 if artist and title:
                     return f"{artist} - {title}"
