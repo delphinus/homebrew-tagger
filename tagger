@@ -2301,15 +2301,13 @@ Examples:
     )
 
     # Create subparsers for different modes
-    subparsers = parser.add_subparsers(dest='command', help='Commands')
+    subparsers = parser.add_subparsers(dest="command", help="Commands")
 
     # ========================================================================
     # Tag management mode (default)
     # ========================================================================
     tag_parser = subparsers.add_parser(
-        'tag',
-        add_help=False,
-        help='Manage audio file tags (default mode)'
+        "tag", add_help=False, help="Manage audio file tags (default mode)"
     )
 
     tag_parser.add_argument(
@@ -2342,57 +2340,51 @@ Examples:
     # Reminder mode (macOS only)
     # ========================================================================
     reminder_parser = subparsers.add_parser(
-        'reminder',
-        help='Manage macOS Reminders (macOS only)'
+        "reminder", help="Manage macOS Reminders (macOS only)"
     )
 
     reminder_subparsers = reminder_parser.add_subparsers(
-        dest='reminder_command',
-        help='Reminder commands'
+        dest="reminder_command", help="Reminder commands"
     )
 
     # reminder add subcommand
-    add_parser = reminder_subparsers.add_parser(
-        'add',
-        help='Add URL to macOS Reminders'
+    add_parser = reminder_subparsers.add_parser("add", help="Add URL to macOS Reminders")
+
+    add_parser.add_argument("url", help="URL to add to reminders")
+
+    add_parser.add_argument(
+        "-t",
+        "--title",
+        help="Reminder title (if not provided, will be extracted from URL or audio metadata)",
     )
 
     add_parser.add_argument(
-        'url',
-        help='URL to add to reminders'
+        "-l",
+        "--list",
+        help="Reminder list name (if not provided, will show selection menu)",
     )
 
     add_parser.add_argument(
-        '-t', '--title',
-        help='Reminder title (if not provided, will be extracted from URL or audio metadata)'
+        "-n", "--notes", help="Additional notes for the reminder"
     )
 
     add_parser.add_argument(
-        '-l', '--list',
-        help='Reminder list name (if not provided, will show selection menu)'
-    )
-
-    add_parser.add_argument(
-        '-n', '--notes',
-        help='Additional notes for the reminder'
-    )
-
-    add_parser.add_argument(
-        '--match-audio',
-        action='store_true',
-        help='Try to match URL with audio files in current directory and use their metadata for title'
+        "--match-audio",
+        action="store_true",
+        help="Try to match URL with audio files in current directory and use their metadata for title",
     )
 
     # Parse arguments with backward compatibility handling
     # Check if first positional arg is a known subcommand
     import sys as sys_module
-    known_subcommands = {'reminder', 'tag'}
+
+    known_subcommands = {"reminder", "tag"}
     argv = sys_module.argv[1:]  # Skip script name
 
     # Find first non-flag argument
     first_positional = None
     for arg in argv:
-        if not arg.startswith('-') and not arg.startswith('--'):
+        if not arg.startswith("-") and not arg.startswith("--"):
             first_positional = arg
             break
 
@@ -2402,8 +2394,8 @@ Examples:
         argv_modified = []
         inserted_tag = False
         for arg in argv:
-            if not inserted_tag and not arg.startswith('-') and not arg.startswith('--'):
-                argv_modified.append('tag')
+            if not inserted_tag and not arg.startswith("-") and not arg.startswith("--"):
+                argv_modified.append("tag")
                 inserted_tag = True
             argv_modified.append(arg)
         args = parser.parse_args(argv_modified)
@@ -2412,7 +2404,7 @@ Examples:
 
     # Default to tag mode if no subcommand specified
     if args.command is None:
-        args.command = 'tag'
+        args.command = "tag"
         # Set default values for tag mode options
         args.yaml_file = None
         args.output = "tagger.yaml"
@@ -2423,12 +2415,12 @@ Examples:
     tagger = Tagger(
         execute=args.execute,
         no_color=args.no_color,
-        prefer_filename=getattr(args, 'prefer_filename', False),
-        thumbnail_crop=getattr(args, 'thumbnail_crop', 'auto'),
+        prefer_filename=getattr(args, "prefer_filename", False),
+        thumbnail_crop=getattr(args, "thumbnail_crop", "auto"),
     )
 
     # Route to appropriate handler
-    if args.command == 'reminder':
+    if args.command == "reminder":
         handle_reminder_command(args, tagger)
     else:  # 'tag' mode (default)
         if args.yaml_file:
