@@ -1,0 +1,19 @@
+#!/bin/bash
+# Japanese man page viewer with proper text wrapping
+# Usage: ./jaman [width]
+
+set -e
+
+MAN_FILE="man/ja/tagger.1"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+if [ ! -f "$MAN_FILE" ]; then
+    echo "Error: $MAN_FILE not found" >&2
+    exit 1
+fi
+
+# Get terminal width
+WIDTH="${1:-${MANWIDTH:-${COLUMNS:-80}}}"
+
+# Generate and wrap the man page
+LANG=ja_JP.UTF-8 mandoc -T utf8 "$MAN_FILE" | "$SCRIPT_DIR/wrap-ja-man.py" "$WIDTH" | ${PAGER:-less}
