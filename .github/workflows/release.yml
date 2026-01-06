@@ -52,61 +52,36 @@ jobs:
         sed -i 's/^\.TH TAGGER 1 "\(.*\)" "tagger [0-9.]*"/\.TH TAGGER 1 "\1" "tagger ${{ inputs.version }}"/' man/ja/tagger.1
         git diff setup.py tagger man/tagger.1 man/ja/tagger.1
 
-    - name: Commit version bump
+    - name: Create version bump PR
+      env:
+        GH_TOKEN: ${{ secrets.PAT_TOKEN }}
       run: |
+        BRANCH_NAME="release/v${{ inputs.version }}"
+        git checkout -b "${BRANCH_NAME}"
         git add setup.py tagger man/tagger.1 man/ja/tagger.1
         git commit -m "chore: bump version to ${{ inputs.version }}"
+        git push origin "${BRANCH_NAME}"
 
-    - name: Create and push tag
-      run: |
-        git tag -a "v${{ inputs.version }}" -m "Release v${{ inputs.version }}"
-        git push origin "v${{ inputs.version }}"
+        # Create PR and wait for it to be created
+        PR_URL=$(gh pr create \
+          --title "chore: bump version to ${{ inputs.version }}" \
+          --body "Bump version to ${{ inputs.version }} for release" \
+          --base main \
+          --head "${BRANCH_NAME}")
 
-    - name: Create GitHub Release
-      env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        gh release create "v${{ inputs.version }}" \
-          --title "v${{ inputs.version }}" \
-          --generate-notes
+        echo "Created PR: ${PR_URL}"
+        echo "PR_URL=${PR_URL}" >> $GITHUB_ENV
 
-    - name: Download release tarball and calculate SHA256
-      run: |
-        sleep 5  # Wait for GitHub to generate tarball
-        curl -sL "https://github.com/${{ github.repository }}/archive/refs/tags/v${{ inputs.version }}.tar.gz" -o release.tar.gz
-        SHA256=$(shasum -a 256 release.tar.gz | awk '{print $1}')
-        echo "SHA256=${SHA256}" >> $GITHUB_ENV
-        echo "Calculated SHA256: ${SHA256}"
-
-    - name: Update Homebrew Formula
-      run: |
-        # Update only the URL and the first SHA256 (Formula tarball), keep all resource SHA256s intact
-        sed -i "s|url \"https://github.com/${{ github.repository }}/archive/refs/tags/v.*\.tar\.gz\"|url \"https://github.com/${{ github.repository }}/archive/refs/tags/v${{ inputs.version }}.tar.gz\"|" tagger.rb
-        # Use awk to replace only the first sha256 occurrence
-        awk -v new_sha="${{ env.SHA256 }}" '
-          !done && /^  sha256 "/ {
-            print "  sha256 \"" new_sha "\""
-            done=1
-            next
-          }
-          { print }
-        ' tagger.rb > tagger.rb.tmp && mv tagger.rb.tmp tagger.rb
-
-        git diff tagger.rb
-
-    - name: Commit and push Formula update
-      run: |
-        git add tagger.rb
-        git commit -m "chore: update tagger.rb with v${{ inputs.version }} SHA256"
-        git push origin main
+        # Note: Tag creation will be done manually after version bump PR is merged
 
     - name: Release Summary
       run: |
-        echo "✅ Release v${{ inputs.version }} completed successfully!"
+        echo "✅ Version bump PR created for v${{ inputs.version }}"
         echo ""
-        echo "📦 Release URL: https://github.com/${{ github.repository }}/releases/tag/v${{ inputs.version }}"
-        echo "🔑 SHA256: ${{ env.SHA256 }}"
+        echo "📝 Version bump PR: ${PR_URL}"
         echo ""
-        echo "To install with Homebrew:"
-        echo "  brew tap delphinus/delphinus"
-        echo "  brew install tagger"
+        echo "Next steps (manual):"
+        echo "  1. Wait for version bump PR CI to pass and merge it"
+        echo "  2. Create git tag: git tag v${{ inputs.version }} && git push origin v${{ inputs.version }}"
+        echo "  3. Create GitHub release: gh release create v${{ inputs.version }} --generate-notes"
+        echo "  4. Update Homebrew formula with the release SHA256"
