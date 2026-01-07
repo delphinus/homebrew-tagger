@@ -1,16 +1,26 @@
 #!/bin/bash
 # View Japanese man page in browser
-# Usage: ./view-ja-man.sh
+# Usage: view-ja-man.sh
 
 set -e
 
-MAN_FILE="man/ja/tagger.1"
-HTML_FILE="/tmp/tagger_ja_$(date +%s).html"
-
-if [ ! -f "$MAN_FILE" ]; then
-    echo "Error: $MAN_FILE not found"
+# Determine man page location
+# Try Homebrew location first, then development location
+if [ -n "${HOMEBREW_PREFIX}" ] && [ -f "${HOMEBREW_PREFIX}/share/man/ja/man1/tagger.1" ]; then
+    MAN_FILE="${HOMEBREW_PREFIX}/share/man/ja/man1/tagger.1"
+elif [ -f "$(brew --prefix 2>/dev/null)/share/man/ja/man1/tagger.1" ]; then
+    MAN_FILE="$(brew --prefix)/share/man/ja/man1/tagger.1"
+elif [ -f "man/ja/tagger.1" ]; then
+    MAN_FILE="man/ja/tagger.1"
+else
+    echo "Error: Japanese man page not found" >&2
+    echo "Tried:" >&2
+    echo "  - \${HOMEBREW_PREFIX}/share/man/ja/man1/tagger.1" >&2
+    echo "  - man/ja/tagger.1 (development)" >&2
     exit 1
 fi
+
+HTML_FILE="/tmp/tagger_ja_$(date +%s).html"
 
 # Convert to HTML with better styling
 mandoc -T html "$MAN_FILE" | sed '

@@ -128,6 +128,11 @@ class Tagger < Formula
     man1.install "man/tagger.1"
     (man/"ja/man1").install "man/ja/tagger.1"
 
+    # Install Japanese man page viewer scripts
+    bin.install "jaman"
+    bin.install "wrap-ja-man.py"
+    bin.install "view-ja-man.sh"
+
     # Install shell completions
     bash_completion.install "completions/tagger.bash" => "tagger"
     zsh_completion.install "completions/_tagger"
@@ -151,5 +156,10 @@ class Tagger < Formula
     # Test man page installation
     assert_predicate man1/"tagger.1", :exist?, "English man page should be installed"
     assert_predicate man/"ja/man1/tagger.1", :exist?, "Japanese man page should be installed"
+
+    # Test Japanese man page viewer scripts
+    assert_predicate bin/"jaman", :exist?, "jaman script should be installed"
+    assert_predicate bin/"wrap-ja-man.py", :exist?, "wrap-ja-man.py should be installed"
+    assert_predicate bin/"view-ja-man.sh", :exist?, "view-ja-man.sh should be installed"
   end
 end
