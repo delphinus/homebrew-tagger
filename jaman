@@ -1,14 +1,22 @@
 #!/bin/bash
 # Japanese man page viewer with proper text wrapping
-# Usage: ./jaman [width]
+# Usage: jaman [width]
 
 set -e
 
-MAN_FILE="man/ja/tagger.1"
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
-if [ ! -f "$MAN_FILE" ]; then
-    echo "Error: $MAN_FILE not found" >&2
+# Determine man page location
+# Try Homebrew location first, then development location
+if [ -n "${HOMEBREW_PREFIX}" ] && [ -f "${HOMEBREW_PREFIX}/share/man/ja/man1/tagger.1" ]; then
+    MAN_FILE="${HOMEBREW_PREFIX}/share/man/ja/man1/tagger.1"
+elif [ -f "$(brew --prefix 2>/dev/null)/share/man/ja/man1/tagger.1" ]; then
+    MAN_FILE="$(brew --prefix)/share/man/ja/man1/tagger.1"
+elif [ -f "man/ja/tagger.1" ]; then
+    MAN_FILE="man/ja/tagger.1"
+else
+    echo "Error: Japanese man page not found" >&2
+    echo "Tried:" >&2
+    echo "  - \${HOMEBREW_PREFIX}/share/man/ja/man1/tagger.1" >&2
+    echo "  - man/ja/tagger.1 (development)" >&2
     exit 1
 fi
 
@@ -16,4 +24,5 @@ fi
 WIDTH="${1:-${MANWIDTH:-${COLUMNS:-80}}}"
 
 # Generate and wrap the man page
-LANG=ja_JP.UTF-8 mandoc -T utf8 "$MAN_FILE" | "$SCRIPT_DIR/wrap-ja-man.py" "$WIDTH" | ${PAGER:-less}
+# wrap-ja-man.py should be in PATH when installed via Homebrew
+LANG=ja_JP.UTF-8 mandoc -T utf8 "$MAN_FILE" | wrap-ja-man.py "$WIDTH" | ${PAGER:-less}
