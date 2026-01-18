@@ -863,7 +863,10 @@ class Tagger:
                     expected_width = video_info.get("best_thumb_width")
                     expected_height = video_info.get("best_thumb_height")
 
-                    if (actual_width != expected_width or actual_height != expected_height):
+                    if (
+                        actual_width != expected_width
+                        or actual_height != expected_height
+                    ):
                         print(f"Warning: Thumbnail metadata mismatch!")
                         print(f"  Expected: {expected_width}x{expected_height}")
                         print(f"  Actual: {actual_width}x{actual_height}")
@@ -876,7 +879,9 @@ class Tagger:
                             actual_res = actual_width * actual_height
 
                             if video_res > actual_res:
-                                print(f"-> Video resolution ({video_width}x{video_height}) is higher. Switching to frame extraction.")
+                                print(
+                                    f"-> Video resolution ({video_width}x{video_height}) is higher. Switching to frame extraction."
+                                )
                                 # Clean up downloaded thumbnail
                                 downloaded_path.unlink()
                                 # Switch to frame extraction
@@ -887,15 +892,22 @@ class Tagger:
                                 )
                                 if timestamp is not None:
                                     success = self.download_youtube_frame(
-                                        video_id, output_path, timestamp=timestamp, crop=crop
+                                        video_id,
+                                        output_path,
+                                        timestamp=timestamp,
+                                        crop=crop,
                                     )
                                     return success
                                 else:
                                     # User cancelled, use the downloaded thumbnail anyway
-                                    print("Using downloaded thumbnail despite resolution mismatch.")
+                                    print(
+                                        "Using downloaded thumbnail despite resolution mismatch."
+                                    )
                                     use_frame_extraction = False
                             else:
-                                print("-> Video resolution is not higher. Using downloaded thumbnail.")
+                                print(
+                                    "-> Video resolution is not higher. Using downloaded thumbnail."
+                                )
 
                 except Exception as e:
                     self.log(
