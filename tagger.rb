@@ -144,8 +144,8 @@ class Tagger < Formula
     system bin/"tagger", "--help"
     system bin/"tagger", "--version"
 
-    # Test ffmpeg availability (required for video frame extraction)
-    system "ffmpeg", "-version"
+    # Note: ffmpeg is a runtime dependency (declared in depends_on)
+    # It's used for video frame extraction but doesn't need to be tested here
 
     # Test YouTube thumbnail dependencies
     # Verify yt-dlp is installed in virtualenv
