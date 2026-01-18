@@ -901,7 +901,11 @@ class Tagger:
             return True
 
     def download_youtube_frame(
-        self, video_id: str, output_path: Path, timestamp: float = 5.0, crop: bool = False
+        self,
+        video_id: str,
+        output_path: Path,
+        timestamp: float = 5.0,
+        crop: bool = False,
     ) -> bool:
         """Download a specific frame from YouTube video
 
