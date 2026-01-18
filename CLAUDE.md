@@ -60,6 +60,28 @@
 - The formula must point to a tag that contains the correct version in the code
 - Version mismatches will cause test failures
 
+### Test Block Synchronization
+
+**CRITICAL: Keep formula test block and CI workflow in sync**
+
+Due to Homebrew limitations with local tap dependency resolution, the `.github/workflows/homebrew-test.yml` workflow runs the formula's test block contents directly instead of using `brew test`.
+
+**When modifying `tagger.rb` test block:**
+1. Update the test block in `tagger.rb` (lines 142-167)
+2. **MUST also update** `.github/workflows/homebrew-test.yml` "Run formula tests" step (lines 77-103)
+3. Ensure both versions test the same functionality
+4. Keep comments and logic synchronized
+
+**Example:**
+- If you add a new dependency check in `tagger.rb` test block
+- You MUST add the equivalent check in the workflow's "Run formula tests" step
+
+**Why this is necessary:**
+- `brew test` cannot resolve dependencies correctly with local taps
+- The workflow runs test block contents directly as a workaround
+- This is a known Homebrew limitation, not a formula issue
+- Both locations must be kept in sync to ensure consistent testing
+
 ## Background Task Management
 
 - Monitor and clean up old PR watch processes periodically
