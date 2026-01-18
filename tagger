@@ -393,6 +393,104 @@ class Tagger:
             else:
                 print("Invalid choice. Please enter 1 or 2.")
 
+    def ask_frame_timestamp(
+        self, video_id: str, output_path: Path, default_timestamp: float = 5.0
+    ) -> float | None:
+        """Interactively select timestamp for frame extraction with preview
+
+        Args:
+            video_id: YouTube video ID
+            output_path: Path where final frame will be saved
+            default_timestamp: Starting timestamp in seconds (default: 5.0)
+
+        Returns:
+            Selected timestamp in seconds, or None if user cancels
+        """
+        timestamp = default_timestamp
+
+        while True:
+            print("\n" + "=" * 60)
+            print(f"Extracting frame from YouTube video at {timestamp} seconds...")
+            print("=" * 60)
+
+            # Download frame at current timestamp
+            temp_preview = output_path.parent / f"temp_preview_{video_id}.jpg"
+            success = self.download_youtube_frame(
+                video_id, temp_preview, timestamp=timestamp, crop=False
+            )
+
+            if not success:
+                print("\nFailed to extract frame. Using default.")
+                if temp_preview.exists():
+                    temp_preview.unlink()
+                return default_timestamp
+
+            # Display preview
+            can_display, reason = self.can_display_images()
+
+            if can_display:
+                try:
+                    from PIL import Image
+
+                    img = Image.open(temp_preview)
+                    width, height = img.size
+
+                    print(f"\nPreview frame at {timestamp} seconds:")
+                    print(f"Dimensions: {width}x{height}")
+
+                    self.display_image_iterm2(temp_preview)
+
+                except Exception as e:
+                    self.log(f"Warning: Could not display preview: {e}")
+            else:
+                print(f"\nWarning: Cannot display preview ({reason})")
+
+            print("\nIs this frame acceptable?")
+            print("  1. Yes, use this frame")
+            print("  2. No, try a different timestamp")
+            print("  3. Cancel (use thumbnail instead)")
+            print()
+
+            while True:
+                choice = input("Enter your choice (1, 2, or 3) [1]: ").strip()
+
+                if choice == "" or choice == "1":
+                    # Accept this frame
+                    if temp_preview.exists():
+                        temp_preview.unlink()
+                    return timestamp
+
+                elif choice == "2":
+                    # Try different timestamp
+                    new_timestamp = input(
+                        f"Enter new timestamp in seconds [{timestamp}]: "
+                    ).strip()
+
+                    if new_timestamp == "":
+                        # User pressed enter, keep current
+                        continue
+
+                    try:
+                        timestamp = float(new_timestamp)
+                        if timestamp < 0:
+                            print("Timestamp must be positive. Try again.")
+                            continue
+                        # Break inner loop to re-extract frame
+                        break
+
+                    except ValueError:
+                        print("Invalid timestamp. Please enter a number.")
+                        continue
+
+                elif choice == "3":
+                    # Cancel, use thumbnail
+                    if temp_preview.exists():
+                        temp_preview.unlink()
+                    return None
+
+                else:
+                    print("Invalid choice. Please enter 1, 2, or 3.")
+
     def get_artwork_hash(self, data: bytes) -> str:
         """Calculate SHA256 hash of artwork data"""
         return hashlib.sha256(data).hexdigest()
@@ -597,15 +695,225 @@ class Tagger:
             identifier = f"{url_info['label_slug']}_{url_info['slug']}"
             return directory / f"bandcamp_{identifier}.jpg"
 
-    def download_youtube_thumbnail(
-        self, video_id: str, output_path: Path, crop: bool = False
-    ) -> bool:
-        """Download YouTube thumbnail and optionally crop to square
+    def get_youtube_video_info(self, video_id: str) -> dict | None:
+        """Get YouTube video information including resolution metadata
 
         Args:
             video_id: YouTube video ID (11 characters)
-            output_path: Path where thumbnail should be saved
-            crop: Whether to crop the thumbnail to square (default: False)
+
+        Returns:
+            Dictionary with keys:
+                - best_video_width: Width of highest quality video format
+                - best_video_height: Height of highest quality video format
+                - best_thumb_width: Width of highest quality thumbnail
+                - best_thumb_height: Height of highest quality thumbnail
+                - duration: Video duration in seconds
+                - title: Video title
+            Returns None if extraction fails
+        """
+        try:
+            import yt_dlp
+
+            url = f"https://www.youtube.com/watch?v={video_id}"
+            ydl_opts = {
+                "quiet": True,
+                "no_warnings": True,
+                "skip_download": True,
+            }
+
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(url, download=False)
+
+            # Find best video format
+            video_formats = [
+                f
+                for f in info.get("formats", [])
+                if f.get("vcodec") != "none" and f.get("width") and f.get("height")
+            ]
+
+            best_video = None
+            if video_formats:
+                best_video = max(
+                    video_formats, key=lambda f: (f.get("height", 0), f.get("width", 0))
+                )
+
+            # Find best thumbnail
+            thumbnails = [
+                t
+                for t in info.get("thumbnails", [])
+                if t.get("width") and t.get("height")
+            ]
+
+            best_thumb = None
+            if thumbnails:
+                best_thumb = max(
+                    thumbnails, key=lambda t: (t.get("width", 0) * t.get("height", 0))
+                )
+
+            return {
+                "best_video_width": best_video.get("width") if best_video else None,
+                "best_video_height": best_video.get("height") if best_video else None,
+                "best_thumb_width": best_thumb.get("width") if best_thumb else None,
+                "best_thumb_height": best_thumb.get("height") if best_thumb else None,
+                "duration": info.get("duration"),
+                "title": info.get("title"),
+            }
+
+        except Exception as e:
+            self.log(f"Warning: Failed to get video info: {e}")
+            return None
+
+    def download_youtube_thumbnail(
+        self, video_id: str, output_path: Path, crop: bool = False
+    ) -> bool:
+        """Download YouTube artwork using smart resolution-based strategy
+
+        Strategy:
+        1. Get video and thumbnail resolution information
+        2. If resolutions match: use thumbnail (fast)
+        3. If resolutions differ: extract frame from video (better quality)
+           - Default to 5 seconds into video
+           - Allow user to preview and adjust timestamp interactively
+
+        Args:
+            video_id: YouTube video ID (11 characters)
+            output_path: Path where artwork should be saved
+            crop: Whether to crop the artwork to square (default: False)
+
+        Returns:
+            True if successful, False otherwise
+        """
+        # Step 1: Get video information
+        video_info = self.get_youtube_video_info(video_id)
+
+        if not video_info:
+            self.log("Warning: Could not get video info, falling back to thumbnail")
+            use_frame_extraction = False
+        else:
+            # Step 2: Compare resolutions
+            video_width = video_info.get("best_video_width")
+            video_height = video_info.get("best_video_height")
+            thumb_width = video_info.get("best_thumb_width")
+            thumb_height = video_info.get("best_thumb_height")
+
+            if video_width and video_height and thumb_width and thumb_height:
+                video_res = video_width * video_height
+                thumb_res = thumb_width * thumb_height
+
+                print(f"\nVideo resolution: {video_width}x{video_height}")
+                print(f"Thumbnail resolution: {thumb_width}x{thumb_height}")
+
+                if video_res == thumb_res:
+                    print("-> Resolutions match. Using thumbnail (faster).")
+                    use_frame_extraction = False
+                else:
+                    print(
+                        f"-> Video resolution is {'higher' if video_res > thumb_res else 'lower'}. Using video frame for best quality."
+                    )
+                    use_frame_extraction = True
+            else:
+                self.log("Warning: Incomplete resolution info, using thumbnail")
+                use_frame_extraction = False
+
+        # Step 3: Extract artwork based on strategy
+        if use_frame_extraction:
+            # Interactive frame extraction
+            timestamp = self.ask_frame_timestamp(
+                video_id, output_path, default_timestamp=5.0
+            )
+
+            if timestamp is None:
+                # User cancelled, fall back to thumbnail
+                print("Falling back to thumbnail...")
+                use_frame_extraction = False
+            else:
+                # Extract frame at selected timestamp
+                success = self.download_youtube_frame(
+                    video_id, output_path, timestamp=timestamp, crop=crop
+                )
+                return success
+
+        # Fall back to traditional thumbnail download
+        if not use_frame_extraction:
+            try:
+                import yt_dlp
+
+                temp_path = output_path.with_suffix("")
+                ydl_opts = {
+                    "skip_download": True,
+                    "writethumbnail": True,
+                    "outtmpl": str(temp_path),
+                    "quiet": True,
+                    "no_warnings": True,
+                }
+
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    url = f"https://www.youtube.com/watch?v={video_id}"
+                    ydl.download([url])
+
+                # Find downloaded thumbnail (yt-dlp adds extension)
+                downloaded_files = list(temp_path.parent.glob(f"{temp_path.name}.*"))
+                if not downloaded_files:
+                    raise Exception("Thumbnail not downloaded")
+
+                downloaded_path = downloaded_files[0]
+
+            except Exception as e:
+                self.log(f"Warning: Failed to download thumbnail: {e}")
+                return False
+
+            # Process the thumbnail
+            try:
+                from PIL import Image
+
+                if crop:
+                    # Crop to square (center crop)
+                    img = Image.open(downloaded_path)
+                    width, height = img.size
+
+                    if width > height:
+                        left = (width - height) // 2
+                        img_cropped = img.crop((left, 0, left + height, height))
+                    else:
+                        top = (height - width) // 2
+                        img_cropped = img.crop((0, top, width, top + width))
+
+                    # Save as JPEG
+                    img_cropped.save(output_path, "JPEG", quality=95)
+
+                    # Clean up temporary file
+                    if downloaded_path != output_path:
+                        downloaded_path.unlink()
+                else:
+                    # Keep original, just move/rename
+                    if downloaded_path != output_path:
+                        # Re-save as JPEG to ensure consistent format
+                        img = Image.open(downloaded_path)
+                        img.save(output_path, "JPEG", quality=95)
+                        downloaded_path.unlink()
+
+            except Exception as e:
+                self.log(f"Warning: Failed to process thumbnail: {e}")
+                # Keep original if processing fails
+                if downloaded_path != output_path:
+                    shutil.move(str(downloaded_path), str(output_path))
+
+            return True
+
+    def download_youtube_frame(
+        self,
+        video_id: str,
+        output_path: Path,
+        timestamp: float = 5.0,
+        crop: bool = False,
+    ) -> bool:
+        """Download a specific frame from YouTube video
+
+        Args:
+            video_id: YouTube video ID (11 characters)
+            output_path: Path where frame should be saved
+            timestamp: Time in seconds to extract frame from (default: 5.0)
+            crop: Whether to crop to square (default: False)
 
         Returns:
             True if successful, False otherwise
@@ -613,37 +921,67 @@ class Tagger:
         try:
             import yt_dlp
 
-            temp_path = output_path.with_suffix("")
+            url = f"https://www.youtube.com/watch?v={video_id}"
+            temp_video = output_path.parent / f"temp_{video_id}.mp4"
+
+            # Download a short segment of the video around the timestamp
+            # We download ~10 seconds to ensure we have the frame we need
+            start_time = max(0, timestamp - 1)
+            end_time = timestamp + 9
+
             ydl_opts = {
-                "skip_download": True,
-                "writethumbnail": True,
-                "outtmpl": str(temp_path),
+                "format": "bestvideo[ext=mp4]",
+                "outtmpl": str(temp_video.with_suffix("")),
                 "quiet": True,
                 "no_warnings": True,
+                "download_ranges": lambda info, ydl: [
+                    {"start_time": start_time, "end_time": end_time}
+                ],
             }
 
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                url = f"https://www.youtube.com/watch?v={video_id}"
                 ydl.download([url])
 
-            # Find downloaded thumbnail (yt-dlp adds extension)
-            downloaded_files = list(temp_path.parent.glob(f"{temp_path.name}.*"))
-            if not downloaded_files:
-                raise Exception("Thumbnail not downloaded")
+            # Find the downloaded video file
+            video_files = list(temp_video.parent.glob(f"temp_{video_id}.*"))
+            if not video_files:
+                raise Exception("Video segment not downloaded")
 
-            downloaded_path = downloaded_files[0]
+            actual_video_path = video_files[0]
 
-        except Exception as e:
-            self.log(f"Warning: Failed to download thumbnail: {e}")
-            return False
+            # Extract frame using ffmpeg
+            # Calculate the seek time within the downloaded segment
+            seek_time = 1.0  # We downloaded starting 1 second before timestamp
 
-        # Process the thumbnail
-        try:
+            subprocess.run(
+                [
+                    "ffmpeg",
+                    "-y",
+                    "-ss",
+                    str(seek_time),
+                    "-i",
+                    str(actual_video_path),
+                    "-frames:v",
+                    "1",
+                    "-q:v",
+                    "2",  # High quality
+                    str(output_path.with_suffix(".temp.jpg")),
+                ],
+                check=True,
+                capture_output=True,
+            )
+
+            # Clean up video file
+            actual_video_path.unlink()
+
+            # Process the extracted frame
             from PIL import Image
+
+            temp_frame = output_path.with_suffix(".temp.jpg")
 
             if crop:
                 # Crop to square (center crop)
-                img = Image.open(downloaded_path)
+                img = Image.open(temp_frame)
                 width, height = img.size
 
                 if width > height:
@@ -653,27 +991,28 @@ class Tagger:
                     top = (height - width) // 2
                     img_cropped = img.crop((0, top, width, top + width))
 
-                # Save as JPEG
                 img_cropped.save(output_path, "JPEG", quality=95)
-
-                # Clean up temporary file
-                if downloaded_path != output_path:
-                    downloaded_path.unlink()
             else:
-                # Keep original, just move/rename
-                if downloaded_path != output_path:
-                    # Re-save as JPEG to ensure consistent format
-                    img = Image.open(downloaded_path)
-                    img.save(output_path, "JPEG", quality=95)
-                    downloaded_path.unlink()
+                # Keep original aspect ratio
+                img = Image.open(temp_frame)
+                img.save(output_path, "JPEG", quality=95)
+
+            # Clean up temporary frame
+            if temp_frame.exists():
+                temp_frame.unlink()
+
+            return True
 
         except Exception as e:
-            self.log(f"Warning: Failed to process thumbnail: {e}")
-            # Keep original if processing fails
-            if downloaded_path != output_path:
-                shutil.move(str(downloaded_path), str(output_path))
-
-        return True
+            self.log(f"Warning: Failed to download frame: {e}")
+            # Clean up any temporary files
+            for pattern in [f"temp_{video_id}.*", "*.temp.jpg"]:
+                for temp_file in output_path.parent.glob(pattern):
+                    try:
+                        temp_file.unlink()
+                    except Exception:
+                        pass
+            return False
 
     def download_bandcamp_artwork(
         self, url: str, output_path: Path, crop: bool = False
