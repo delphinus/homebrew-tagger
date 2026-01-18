@@ -755,6 +755,7 @@ class Tagger:
                 "best_video_height": best_video.get("height") if best_video else None,
                 "best_thumb_width": best_thumb.get("width") if best_thumb else None,
                 "best_thumb_height": best_thumb.get("height") if best_thumb else None,
+                "best_thumb_url": best_thumb.get("url") if best_thumb else None,
                 "duration": info.get("duration"),
                 "title": info.get("title"),
             }
@@ -835,32 +836,61 @@ class Tagger:
 
         # Fall back to traditional thumbnail download
         if not use_frame_extraction:
-            try:
-                import yt_dlp
+            # If we have the URL from video_info, download directly (ensures highest quality)
+            if video_info and video_info.get("best_thumb_url"):
+                try:
+                    from io import BytesIO
 
-                temp_path = output_path.with_suffix("")
-                ydl_opts = {
-                    "skip_download": True,
-                    "writethumbnail": True,
-                    "outtmpl": str(temp_path),
-                    "quiet": True,
-                    "no_warnings": True,
-                }
+                    import requests
 
-                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    url = f"https://www.youtube.com/watch?v={video_id}"
-                    ydl.download([url])
+                    thumb_url = video_info["best_thumb_url"]
+                    response = requests.get(thumb_url, timeout=30)
+                    response.raise_for_status()
 
-                # Find downloaded thumbnail (yt-dlp adds extension)
-                downloaded_files = list(temp_path.parent.glob(f"{temp_path.name}.*"))
-                if not downloaded_files:
-                    raise Exception("Thumbnail not downloaded")
+                    # Save to temporary path
+                    temp_path = output_path.with_suffix(".temp.jpg")
+                    with open(temp_path, "wb") as f:
+                        f.write(response.content)
 
-                downloaded_path = downloaded_files[0]
+                    downloaded_path = temp_path
 
-            except Exception as e:
-                self.log(f"Warning: Failed to download thumbnail: {e}")
-                return False
+                except Exception as e:
+                    self.log(
+                        f"Warning: Failed to download thumbnail from URL: {e}, falling back to yt-dlp"
+                    )
+                    # Fall back to yt-dlp method
+                    video_info = None
+
+            # Fallback: use yt-dlp (when video_info not available or URL download failed)
+            if not video_info or not video_info.get("best_thumb_url"):
+                try:
+                    import yt_dlp
+
+                    temp_path = output_path.with_suffix("")
+                    ydl_opts = {
+                        "skip_download": True,
+                        "writethumbnail": True,
+                        "outtmpl": str(temp_path),
+                        "quiet": True,
+                        "no_warnings": True,
+                    }
+
+                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                        url = f"https://www.youtube.com/watch?v={video_id}"
+                        ydl.download([url])
+
+                    # Find downloaded thumbnail (yt-dlp adds extension)
+                    downloaded_files = list(
+                        temp_path.parent.glob(f"{temp_path.name}.*")
+                    )
+                    if not downloaded_files:
+                        raise Exception("Thumbnail not downloaded")
+
+                    downloaded_path = downloaded_files[0]
+
+                except Exception as e:
+                    self.log(f"Warning: Failed to download thumbnail: {e}")
+                    return False
 
             # Process the thumbnail
             try:
