@@ -1028,7 +1028,7 @@ class Tagger:
                 ydl.download([url])
 
             # Find the downloaded video file
-            video_files = list(temp_video.parent.glob(f"temp_{video_id}.*"))
+            video_files = list(temp_video.parent.glob(f"temp_{video_id}*"))
             if not video_files:
                 raise Exception("Video segment not downloaded")
 
