@@ -879,7 +879,9 @@ class Tagger:
                         ydl.download([url])
 
                     # Find downloaded thumbnail (yt-dlp adds extension)
-                    downloaded_files = list(temp_path.parent.glob(f"{temp_path.name}.*"))
+                    downloaded_files = list(
+                        temp_path.parent.glob(f"{temp_path.name}.*")
+                    )
                     if not downloaded_files:
                         raise Exception("Thumbnail not downloaded")
 
