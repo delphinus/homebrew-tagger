@@ -60,8 +60,20 @@ jobs:
         brew tap-new $TAP
         cp $FORMULA "$(brew --repo $TAP)/Formula/"
 
-        # Install from local tap
+        # Install from local tap (this will also install dependencies like ffmpeg)
         brew install -v $TAP/tagger
+
+    - name: Verify dependencies are installed
+      run: |
+        # Verify ffmpeg is available (required for video frame extraction)
+        echo "Checking if ffmpeg is installed..."
+        if ! which ffmpeg > /dev/null 2>&1; then
+          echo "ffmpeg not found, installing explicitly..."
+          brew install ffmpeg
+        else
+          echo "✓ ffmpeg already installed"
+          ffmpeg -version | head -1
+        fi
 
     - name: Test tagger installation
       run: |
