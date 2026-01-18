@@ -144,6 +144,9 @@ class Tagger < Formula
     system bin/"tagger", "--help"
     system bin/"tagger", "--version"
 
+    # Test ffmpeg availability (required for video frame extraction)
+    system "ffmpeg", "-version"
+
     # Test YouTube thumbnail dependencies
     # Verify yt-dlp is installed in virtualenv
     system libexec/"bin/python", "-c", "import yt_dlp; " \
