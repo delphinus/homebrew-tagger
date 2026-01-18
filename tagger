@@ -839,8 +839,9 @@ class Tagger:
             # If we have the URL from video_info, download directly (ensures highest quality)
             if video_info and video_info.get("best_thumb_url"):
                 try:
-                    import requests
                     from io import BytesIO
+
+                    import requests
 
                     thumb_url = video_info["best_thumb_url"]
                     response = requests.get(thumb_url, timeout=30)
