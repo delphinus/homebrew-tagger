@@ -130,7 +130,9 @@ jobs:
 
         # Update formula
         sed -i "s|url \"https://github.com/delphinus/homebrew-tagger/archive/refs/tags/v[0-9.]*\.tar\.gz\"|url \"${TARBALL_URL}\"|" tagger.rb
-        sed -i "s/sha256 \"[a-f0-9]*\"/sha256 \"${SHA256}\"/" tagger.rb
+        # Only update the main formula SHA256 (in the first 20 lines, with 2-space indent)
+        # This avoids changing resource SHA256s which come later in the file
+        sed -i '1,20s/^  sha256 "[a-f0-9]*"$/  sha256 "'"${SHA256}"'"/' tagger.rb
 
         # Create formula update PR
         FORMULA_BRANCH="formula/v${{ inputs.version }}"
