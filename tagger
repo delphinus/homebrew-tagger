@@ -394,7 +394,11 @@ class Tagger:
                 print("Invalid choice. Please enter 1 or 2.")
 
     def ask_frame_timestamp(
-        self, video_id: str, output_path: Path, default_timestamp: float = 5.0
+        self,
+        video_id: str,
+        output_path: Path,
+        default_timestamp: float = 5.0,
+        interactive: bool = True,
     ) -> float | None:
         """Interactively select timestamp for frame extraction with preview
 
@@ -402,10 +406,15 @@ class Tagger:
             video_id: YouTube video ID
             output_path: Path where final frame will be saved
             default_timestamp: Starting timestamp in seconds (default: 5.0)
+            interactive: Whether to prompt for user input (default: True)
 
         Returns:
             Selected timestamp in seconds, or None if user cancels
         """
+        # In non-interactive mode, just return the default timestamp
+        if not interactive:
+            return default_timestamp
+
         timestamp = default_timestamp
 
         while True:
@@ -765,7 +774,11 @@ class Tagger:
             return None
 
     def download_youtube_thumbnail(
-        self, video_id: str, output_path: Path, crop: bool = False
+        self,
+        video_id: str,
+        output_path: Path,
+        crop: bool = False,
+        interactive: bool = True,
     ) -> bool:
         """Download YouTube artwork using smart resolution-based strategy
 
@@ -780,6 +793,7 @@ class Tagger:
             video_id: YouTube video ID (11 characters)
             output_path: Path where artwork should be saved
             crop: Whether to crop the artwork to square (default: False)
+            interactive: Whether to prompt for user input (default: True)
 
         Returns:
             True if successful, False otherwise
@@ -820,7 +834,7 @@ class Tagger:
         if use_frame_extraction:
             # Interactive frame extraction
             timestamp = self.ask_frame_timestamp(
-                video_id, output_path, default_timestamp=5.0
+                video_id, output_path, default_timestamp=5.0, interactive=interactive
             )
 
             if timestamp is None:
@@ -1028,7 +1042,7 @@ class Tagger:
                 ydl.download([url])
 
             # Find the downloaded video file
-            video_files = list(temp_video.parent.glob(f"temp_{video_id}.*"))
+            video_files = list(temp_video.parent.glob(f"temp_{video_id}*"))
             if not video_files:
                 raise Exception("Video segment not downloaded")
 
@@ -2087,7 +2101,9 @@ class Tagger:
                 )
 
                 # Download thumbnail first
-                if self.download_youtube_thumbnail(video_id, path, crop=False):
+                if self.download_youtube_thumbnail(
+                    video_id, path, crop=False, interactive=interactive
+                ):
                     print(" ✓ Downloaded")
 
                     # Determine whether to crop this thumbnail
