@@ -52,7 +52,7 @@ jobs:
         sed -i 's/^\.TH TAGGER 1 "\(.*\)" "tagger [0-9.]*"/\.TH TAGGER 1 "\1" "tagger ${{ inputs.version }}"/' man/ja/tagger.1
         git diff setup.py tagger man/tagger.1 man/ja/tagger.1
 
-    - name: Create version bump PR
+    - name: Create and merge version bump PR
       env:
         GH_TOKEN: ${{ secrets.PAT_TOKEN }}
       run: |
@@ -62,7 +62,7 @@ jobs:
         git commit -m "chore: bump version to ${{ inputs.version }}"
         git push origin "${BRANCH_NAME}"
 
-        # Create PR and wait for it to be created
+        # Create PR
         PR_URL=$(gh pr create \
           --title "chore: bump version to ${{ inputs.version }}" \
           --body "Bump version to ${{ inputs.version }} for release" \
@@ -70,18 +70,115 @@ jobs:
           --head "${BRANCH_NAME}")
 
         echo "Created PR: ${PR_URL}"
-        echo "PR_URL=${PR_URL}" >> $GITHUB_ENV
+        PR_NUMBER=$(echo "${PR_URL}" | grep -o '[0-9]*$')
+        echo "PR_NUMBER=${PR_NUMBER}" >> $GITHUB_ENV
 
-        # Note: Tag creation will be done manually after version bump PR is merged
+        # Wait for CI to complete
+        echo "Waiting for CI checks to complete..."
+        sleep 30
+
+        while true; do
+          STATUS=$(gh pr checks "${PR_NUMBER}" --json state -q '.[].state' | sort -u)
+
+          if echo "${STATUS}" | grep -q "FAILURE"; then
+            echo "❌ CI checks failed"
+            gh pr checks "${PR_NUMBER}"
+            exit 1
+          fi
+
+          if [ "$(echo "${STATUS}" | grep -v "SUCCESS" | wc -l)" -eq 0 ]; then
+            echo "✅ All CI checks passed"
+            break
+          fi
+
+          echo "Still waiting for checks... (current: ${STATUS})"
+          sleep 30
+        done
+
+        # Merge the PR
+        gh pr merge "${PR_NUMBER}" --squash --delete-branch
+        echo "✅ Version bump PR merged"
+
+    - name: Create and push tag
+      run: |
+        # Fetch latest main after merge
+        git checkout main
+        git pull origin main
+
+        # Create and push tag
+        git tag "v${{ inputs.version }}"
+        git push origin "v${{ inputs.version }}"
+        echo "✅ Created and pushed tag v${{ inputs.version }}"
+
+    - name: Create GitHub release
+      env:
+        GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+      run: |
+        gh release create "v${{ inputs.version }}" \
+          --title "v${{ inputs.version }}" \
+          --generate-notes
+        echo "✅ Created GitHub release v${{ inputs.version }}"
+
+    - name: Update Homebrew formula
+      env:
+        GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+      run: |
+        # Calculate SHA256 of the release tarball
+        TARBALL_URL="https://github.com/delphinus/homebrew-tagger/archive/refs/tags/v${{ inputs.version }}.tar.gz"
+        SHA256=$(curl -sL "${TARBALL_URL}" | shasum -a 256 | awk '{print $1}')
+        echo "Calculated SHA256: ${SHA256}"
+
+        # Update formula
+        sed -i "s|url \"https://github.com/delphinus/homebrew-tagger/archive/refs/tags/v[0-9.]*\.tar\.gz\"|url \"${TARBALL_URL}\"|" tagger.rb
+        sed -i "s/sha256 \"[a-f0-9]*\"/sha256 \"${SHA256}\"/" tagger.rb
+
+        # Create formula update PR
+        FORMULA_BRANCH="formula/v${{ inputs.version }}"
+        git checkout -b "${FORMULA_BRANCH}"
+        git add tagger.rb
+        git commit -m "chore: update tagger.rb with v${{ inputs.version }} SHA256"
+        git push origin "${FORMULA_BRANCH}"
+
+        # Create PR
+        FORMULA_PR_URL=$(gh pr create \
+          --title "chore: update tagger.rb with v${{ inputs.version }} SHA256" \
+          --body "Update Homebrew formula for v${{ inputs.version }} release with SHA256: \`${SHA256}\`" \
+          --base main \
+          --head "${FORMULA_BRANCH}")
+
+        echo "Created formula PR: ${FORMULA_PR_URL}"
+        FORMULA_PR_NUMBER=$(echo "${FORMULA_PR_URL}" | grep -o '[0-9]*$')
+
+        # Wait for CI to complete
+        echo "Waiting for formula PR CI checks to complete..."
+        sleep 30
+
+        while true; do
+          STATUS=$(gh pr checks "${FORMULA_PR_NUMBER}" --json state -q '.[].state' | sort -u)
+
+          if echo "${STATUS}" | grep -q "FAILURE"; then
+            echo "❌ Formula PR CI checks failed"
+            gh pr checks "${FORMULA_PR_NUMBER}"
+            exit 1
+          fi
+
+          if [ "$(echo "${STATUS}" | grep -v "SUCCESS" | wc -l)" -eq 0 ]; then
+            echo "✅ All formula PR CI checks passed"
+            break
+          fi
+
+          echo "Still waiting for checks... (current: ${STATUS})"
+          sleep 30
+        done
+
+        # Merge the formula PR
+        gh pr merge "${FORMULA_PR_NUMBER}" --squash --delete-branch
+        echo "✅ Formula PR merged"
 
     - name: Release Summary
       run: |
-        echo "✅ Version bump PR created for v${{ inputs.version }}"
+        echo "✅ Release v${{ inputs.version }} completed successfully!"
         echo ""
-        echo "📝 Version bump PR: ${PR_URL}"
-        echo ""
-        echo "Next steps (manual):"
-        echo "  1. Wait for version bump PR CI to pass and merge it"
-        echo "  2. Create git tag: git tag v${{ inputs.version }} && git push origin v${{ inputs.version }}"
-        echo "  3. Create GitHub release: gh release create v${{ inputs.version }} --generate-notes"
-        echo "  4. Update Homebrew formula with the release SHA256"
+        echo "📦 Tag: v${{ inputs.version }}"
+        echo "🚀 Release: https://github.com/delphinus/homebrew-tagger/releases/tag/v${{ inputs.version }}"
+        echo "🍺 Homebrew formula updated and merged"
