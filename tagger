@@ -1073,7 +1073,10 @@ class Tagger:
                         "quiet": True,
                         "no_warnings": True,
                         "external_downloader": "ffmpeg",
-                        "external_downloader_args": ["-t", "30"],  # Download first 30 seconds
+                        "external_downloader_args": [
+                            "-t",
+                            "30",
+                        ],  # Download first 30 seconds
                     }
 
                     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
