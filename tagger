@@ -1034,10 +1034,12 @@ class Tagger:
                 end_time = timestamp + 9
 
                 ydl_opts = {
-                    "format": "bestvideo[ext=mp4]",
+                    "format": "bestvideo[ext=mp4]/bestvideo",
                     "outtmpl": str(temp_video.with_suffix("")),
                     "quiet": True,
                     "no_warnings": True,
+                    "cookiesfrombrowser": ("firefox",),
+                    "remote_components": ["ejs:github"],
                     "download_ranges": lambda info, ydl: [
                         {"start_time": start_time, "end_time": end_time}
                     ],
@@ -1062,17 +1064,18 @@ class Tagger:
                     except Exception:
                         pass
 
-            # Strategy 2: If segmented download failed, download lower quality full video
+            # Strategy 2: If segmented download failed, download full high quality video
             if not download_success:
-                self.log("Falling back to lower quality video download...")
+                self.log("Falling back to full video download...")
                 try:
-                    # Download lower quality video (faster and more reliable)
-                    # Use worst quality that's still reasonable (360p or better if available)
+                    # Download full video with best quality
                     ydl_opts = {
-                        "format": "worst[height>=360][ext=mp4]/worst[ext=mp4]/worst",
+                        "format": "bestvideo[ext=mp4]/bestvideo",
                         "outtmpl": str(temp_video.with_suffix("")),
                         "quiet": True,
                         "no_warnings": True,
+                        "cookiesfrombrowser": ("firefox",),
+                        "remote_components": ["ejs:github"],
                     }
 
                     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -1088,7 +1091,7 @@ class Tagger:
                     download_success = True
 
                 except Exception as full_error:
-                    self.log(f"Lower quality download also failed: {full_error}")
+                    self.log(f"Full video download also failed: {full_error}")
                     raise
 
             if not download_success or actual_video_path is None:
