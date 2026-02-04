@@ -1023,35 +1023,79 @@ class Tagger:
             url = f"https://www.youtube.com/watch?v={video_id}"
             temp_video = output_path.parent / f"temp_{video_id}.mp4"
 
-            # Download a short segment of the video around the timestamp
-            # We download ~10 seconds to ensure we have the frame we need
-            start_time = max(0, timestamp - 1)
-            end_time = timestamp + 9
+            # Try segmented download first (faster), with fallback to full video
+            download_success = False
+            actual_video_path = None
+            seek_time = timestamp
 
-            ydl_opts = {
-                "format": "bestvideo[ext=mp4]",
-                "outtmpl": str(temp_video.with_suffix("")),
-                "quiet": True,
-                "no_warnings": True,
-                "download_ranges": lambda info, ydl: [
-                    {"start_time": start_time, "end_time": end_time}
-                ],
-            }
+            # Strategy 1: Try downloading a short segment (fast but may fail)
+            try:
+                start_time = max(0, timestamp - 1)
+                end_time = timestamp + 9
 
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                ydl.download([url])
+                ydl_opts = {
+                    "format": "bestvideo[ext=mp4]",
+                    "outtmpl": str(temp_video.with_suffix("")),
+                    "quiet": True,
+                    "no_warnings": True,
+                    "download_ranges": lambda info, ydl: [
+                        {"start_time": start_time, "end_time": end_time}
+                    ],
+                }
 
-            # Find the downloaded video file
-            video_files = list(temp_video.parent.glob(f"temp_{video_id}*"))
-            if not video_files:
-                raise Exception("Video segment not downloaded")
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    ydl.download([url])
 
-            actual_video_path = video_files[0]
+                # Find the downloaded video file
+                video_files = list(temp_video.parent.glob(f"temp_{video_id}*"))
+                if video_files:
+                    actual_video_path = video_files[0]
+                    seek_time = 1.0  # We downloaded starting 1 second before timestamp
+                    download_success = True
+
+            except Exception as segment_error:
+                self.log(f"Segmented download failed: {segment_error}")
+                # Clean up any partial files from failed segment download
+                for temp_file in temp_video.parent.glob(f"temp_{video_id}*"):
+                    try:
+                        temp_file.unlink()
+                    except Exception:
+                        pass
+
+            # Strategy 2: If segmented download failed, download beginning of full video
+            if not download_success:
+                self.log("Falling back to full video download...")
+                try:
+                    # Download first 30 seconds of video (should cover most use cases)
+                    ydl_opts = {
+                        "format": "bestvideo[ext=mp4]",
+                        "outtmpl": str(temp_video.with_suffix("")),
+                        "quiet": True,
+                        "no_warnings": True,
+                        "external_downloader": "ffmpeg",
+                        "external_downloader_args": ["-t", "30"],  # Download first 30 seconds
+                    }
+
+                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                        ydl.download([url])
+
+                    # Find the downloaded video file
+                    video_files = list(temp_video.parent.glob(f"temp_{video_id}*"))
+                    if not video_files:
+                        raise Exception("Failed to download video")
+
+                    actual_video_path = video_files[0]
+                    seek_time = timestamp  # Seek directly to timestamp in the downloaded portion
+                    download_success = True
+
+                except Exception as full_error:
+                    self.log(f"Full video download also failed: {full_error}")
+                    raise
+
+            if not download_success or actual_video_path is None:
+                raise Exception("All download strategies failed")
 
             # Extract frame using ffmpeg
-            # Calculate the seek time within the downloaded segment
-            seek_time = 1.0  # We downloaded starting 1 second before timestamp
-
             subprocess.run(
                 [
                     "ffmpeg",
